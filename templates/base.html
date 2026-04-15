@@ -1,0 +1,483 @@
+{% load static %}<!doctype html>
+<html lang="ru" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
+    <style>
+      :root{
+        /* Темная тема - по умолчанию */
+        --ink:#151a30;
+        --fog:#2d3b66;
+        --bone:#fbfdff;
+        --muted:#d2daf2;
+        --accent:#6ce4ff;
+        --accent-2:#9a82ff;
+        --body-bg: radial-gradient(900px 450px at 10% 0%, rgba(108,228,255,.28), transparent 55%), radial-gradient(1200px 700px at 90% 0%, rgba(154,130,255,.30), transparent 60%), linear-gradient(180deg, #182246 0%, #121c3e 100%);
+        --body-color: #fbfdff;
+        --panel-bg: rgba(40,53,94,.54);
+        --panel-border: rgba(255,255,255,.14);
+        --navbar-bg: rgba(23,33,66,.66);
+        --navbar-border: rgba(255,255,255,.12);
+        --form-bg: rgba(26,37,73,.70);
+        --form-border: rgba(255,255,255,.18);
+        --form-text: #fbfdff;
+      }
+
+      html[data-theme="light"]{
+        --ink:#ffffff;
+        --fog:#f5f7fa;
+        --bone:#1a1f36;
+        --muted:#666b85;
+        --accent:#0066cc;
+        --accent-2:#0052a3;
+        --body-bg: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+        --body-color: #1a1f36;
+        --panel-bg: rgba(255,255,255,.95);
+        --panel-border: rgba(0,0,0,.08);
+        --navbar-bg: rgba(255,255,255,.95);
+        --navbar-border: rgba(0,0,0,.06);
+        --form-bg: rgba(245,247,250,.8);
+        --form-border: rgba(0,0,0,.12);
+        --form-text: #1a1f36;
+      }
+
+      html[data-theme="light"] a{
+        color: #0052a3;
+      }
+      html[data-theme="light"] a:hover{
+        color: #0066cc;
+      }
+
+      body{
+        background: var(--body-bg) !important;
+        color: var(--body-color);
+        min-height: 100vh;
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+
+      .navbar{
+        backdrop-filter: blur(10px);
+        background: var(--navbar-bg) !important;
+        border-bottom: 1px solid var(--navbar-border);
+        transition: background-color 0.3s ease, border-color 0.3s ease;
+      }
+
+      .brand-dot{
+        display:inline-block;
+        width:.55rem;height:.55rem;
+        border-radius:999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+        box-shadow: 0 0 0 4px rgba(65,216,255,.22);
+        margin-right:.6rem;
+      }
+
+      html[data-theme="light"] .brand-dot{
+        box-shadow: 0 0 0 4px rgba(0,102,204,.15);
+      }
+
+      .theme-toggle{
+        background: transparent;
+        border: 1px solid var(--navbar-border);
+        color: var(--bone);
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        margin-left: 1rem;
+      }
+
+      .theme-toggle:hover{
+        background: rgba(255,255,255,.1);
+        transform: scale(1.1);
+      }
+
+      html[data-theme="light"] .theme-toggle{
+        border-color: rgba(0,0,0,.12);
+        color: #1a1f36;
+      }
+
+      html[data-theme="light"] .theme-toggle:hover{
+        background: rgba(0,0,0,.05);
+      }
+
+      .panel{
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 1rem;
+        box-shadow: 0 16px 44px rgba(8,12,28,.28);
+        transition: all 0.3s ease;
+      }
+
+      html[data-theme="light"] .panel{
+        box-shadow: 0 4px 12px rgba(0,0,0,.08);
+      }
+
+      .text-muted-soft{ 
+        color: var(--muted) !important; 
+        transition: color 0.3s ease;
+      }
+
+      .hero-copy{
+        font-size: 1.18rem;
+        line-height: 1.75;
+      }
+
+      .hero-section{
+        background-image: url('{% static "images/pic.jpg" %}'),
+                          linear-gradient(135deg, rgba(30, 70, 130, 0.8) 0%, rgba(50, 50, 100, 0.8) 100%),
+                          linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+        background-size: cover;
+        background-position: center;
+        background-attachment: scroll;
+        min-height: 500px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        border-radius: 1.5rem;
+        box-shadow: 0 20px 60px rgba(8,12,28,.35);
+        margin-bottom: 3rem;
+      }
+
+      html[data-theme="light"] .hero-section{
+        background: linear-gradient(135deg, rgba(0, 40, 100, 0.85) 0%, rgba(0, 30, 80, 0.85) 100%),
+                    linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+        box-shadow: 0 8px 24px rgba(0,102,204,.15);
+      }
+
+      .hero-section::before{
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: 
+          radial-gradient(circle at 20% 50%, rgba(255,255,255,.1) 0%, transparent 50%),
+          radial-gradient(circle at 80% 80%, rgba(255,255,255,.08) 0%, transparent 50%);
+        pointer-events: none;
+      }
+
+      .hero-content{
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        color: white;
+      }
+
+      .hero-content h1{
+        font-size: clamp(2.5rem, 8vw, 4rem);
+        font-weight: 700;
+        margin-bottom: 1rem;
+        text-shadow: 0 2px 8px rgba(0,0,0,.2);
+      }
+
+      .hero-content p{
+        font-size: 1.2rem;
+        max-width: 600px;
+        opacity: 0.95;
+        text-shadow: 0 1px 4px rgba(0,0,0,.1);
+      }
+
+      a{ 
+        color: #96eaff;
+        transition: color 0.3s ease;
+      }
+      a:hover{ 
+        color: #c7f4ff; 
+      }
+
+      .btn-accent{
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+        border: 1px solid rgba(255,255,255,.10);
+        color: #081223;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .btn-accent:hover{ 
+        filter: brightness(1.05);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(108,228,255,.2);
+      }
+
+      html[data-theme="light"] .btn-accent{
+        color: white;
+      }
+
+      .btn-outline-light{
+        transition: all 0.3s ease;
+      }
+
+      .btn-outline-light:hover{
+        transform: translateY(-2px);
+      }
+
+      .table-dark{
+        --bs-table-bg: rgba(12,16,20,.35);
+        --bs-table-border-color: rgba(255,255,255,.08);
+        --bs-table-color: var(--bone);
+      }
+
+      html[data-theme="light"] .table-dark{
+        --bs-table-bg: rgba(245,247,250,.6);
+        --bs-table-border-color: rgba(0,0,0,.08);
+        --bs-table-color: #1a1f36;
+      }
+
+      .form-control, .ts-control{
+        background: var(--form-bg) !important;
+        border-color: var(--form-border) !important;
+        color: var(--form-text) !important;
+        transition: all 0.3s ease;
+      }
+
+      .form-control:focus, .ts-control:focus{
+        box-shadow: 0 0 0 3px rgba(108,228,255,.1) !important;
+        border-color: var(--accent) !important;
+      }
+
+      .form-control::placeholder{
+        color: rgba(245, 250, 255, .72) !important;
+      }
+
+      html[data-theme="light"] .form-control::placeholder{
+        color: rgba(26, 31, 54, .6) !important;
+      }
+
+      .form-select{
+        background-color: var(--form-bg) !important;
+        border-color: var(--form-border) !important;
+        color: var(--form-text) !important;
+        transition: all 0.3s ease;
+      }
+
+      .form-select option{
+        color: #0e1736;
+      }
+
+      html[data-theme="light"] .form-select option{
+        color: #1a1f36;
+      }
+
+      .ts-control{
+        min-height: 46px !important;
+      }
+
+      .ts-control input{
+        color: var(--form-text) !important;
+      }
+
+      .ts-control .item{
+        color: var(--form-text) !important;
+      }
+
+      .ts-wrapper.single .ts-control:after{ 
+        border-color: var(--muted) transparent transparent transparent !important;
+      }
+
+      .ts-dropdown{
+        background: #1f2d57 !important;
+        border: 1px solid rgba(108,228,255,.45) !important;
+        box-shadow: 0 14px 32px rgba(8,12,28,.35) !important;
+        color: #e9f5ff !important;
+      }
+
+      html[data-theme="light"] .ts-dropdown{
+        background: #f5f7fa !important;
+        border: 1px solid rgba(0,0,0,.1) !important;
+        color: #1a1f36 !important;
+      }
+
+      .ts-dropdown .option{
+        color: #e9f5ff !important;
+      }
+
+      html[data-theme="light"] .ts-dropdown .option{
+        color: #1a1f36 !important;
+      }
+
+      .ts-dropdown .option:hover{
+        background: rgba(65,216,255,.18) !important;
+      }
+
+      html[data-theme="light"] .ts-dropdown .option:hover{
+        background: rgba(0,102,204,.1) !important;
+      }
+
+      .ts-dropdown .active{
+        background: linear-gradient(90deg, rgba(65,216,255,.28), rgba(127,91,255,.30)) !important;
+      }
+
+      html[data-theme="light"] .ts-dropdown .active{
+        background: linear-gradient(90deg, rgba(0,102,204,.12), rgba(0,82,163,.12)) !important;
+      }
+
+      .small-kbd{
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size:.85rem;
+        color: var(--muted);
+        transition: color 0.3s ease;
+      }
+
+      /* Stat cards для cemetery.html */
+      .stat-card{
+        background: linear-gradient(135deg, rgba(108,228,255,.15) 0%, rgba(154,130,255,.1) 100%);
+        border: 1px solid rgba(108,228,255,.3);
+        border-radius: 1rem;
+        padding: 2rem 1.5rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .stat-card:hover{
+        transform: translateY(-8px);
+        box-shadow: 0 16px 40px rgba(108,228,255,.15);
+        background: linear-gradient(135deg, rgba(108,228,255,.2) 0%, rgba(154,130,255,.15) 100%);
+      }
+
+      .stat-card.burials{
+        background: linear-gradient(135deg, rgba(108,228,255,.15) 0%, rgba(154,130,255,.1) 100%);
+        border-color: rgba(108,228,255,.3);
+      }
+
+      .stat-card.people{
+        background: linear-gradient(135deg, rgba(154,130,255,.15) 0%, rgba(108,228,255,.1) 100%);
+        border-color: rgba(154,130,255,.3);
+      }
+
+      html[data-theme="light"] .stat-card{
+        background: linear-gradient(135deg, rgba(0,102,204,.08) 0%, rgba(0,82,163,.05) 100%);
+        border-color: rgba(0,102,204,.2);
+      }
+
+      html[data-theme="light"] .stat-card:hover{
+        box-shadow: 0 16px 40px rgba(0,102,204,.1);
+        background: linear-gradient(135deg, rgba(0,102,204,.12) 0%, rgba(0,82,163,.08) 100%);
+      }
+
+      html[data-theme="light"] .stat-card.burials{
+        border-color: rgba(0,102,204,.25);
+      }
+
+      html[data-theme="light"] .stat-card.people{
+        border-color: rgba(0,82,163,.25);
+      }
+
+      .stat-icon{
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.9;
+      }
+
+      .stat-number{
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+      }
+
+      .stat-label{
+        font-size: 1rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 500;
+      }
+
+      /* Centered content */
+      .content-center{
+        text-align: center;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .form-section{
+        max-width: 1800px;
+        width: min(96vw, 1800px);
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .wide-panel{
+        max-width: 1800px;
+        width: min(96vw, 1800px);
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .section-icon{
+        display: inline-block;
+        font-size: 1.5rem;
+        margin-right: 0.5rem;
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+      <div class="container">
+        <a class="navbar-brand fw-semibold" href="{% url 'index' %}">
+          <span class="brand-dot"></span>Онлайн-кладбище
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item"><a class="nav-link" href="{% url 'index' %}">Главная</a></li>
+            <li class="nav-item"><a class="nav-link" href="{% url 'map' %}">Карта</a></li>
+          </ul>
+          <button class="theme-toggle" id="theme-toggle" title="Переключить тему (Dark/Light)">
+            <span id="theme-icon">🌙</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container-fluid py-4 py-md-5 px-3 px-md-4">
+      {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+
+    <script>
+      // Theme Toggle
+      const themeToggle = document.getElementById('theme-toggle');
+      const themeIcon = document.getElementById('theme-icon');
+      const htmlElement = document.documentElement;
+
+      // Загрузить сохраненную тему или использовать темную по умолчанию
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      htmlElement.setAttribute('data-theme', savedTheme);
+      updateThemeIcon(savedTheme);
+
+      themeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateThemeIcon(newTheme);
+      });
+
+      function updateThemeIcon(theme) {
+        themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+    </script>
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>
