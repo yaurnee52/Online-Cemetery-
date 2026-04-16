@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <!-- Hero Section -->
+  <div class="hero-section mb-5">
+    <div class="hero-content">
+      <h1>Онлайн-кладбище</h1>
+      <p>Информационная система поиска кладбищ и мест захоронений в Москве</p>
+    </div>
+  </div>
+
+  <!-- Centered Description -->
+  <div class="panel p-4 p-md-5 mb-4 content-center wide-panel" style="background: rgba(25, 35, 65, 0.75) !important; border-color: rgba(108, 228, 255, 0.2) !important;">
+    <p class="text-muted-soft mb-0 hero-copy">
+      "Онлайн-кладбище" — информационная система поиска кладбищ и мест захоронений города Москвы, которая объединяет данные из открытых источников, хранит и обрабатывает сведения о кладбищах, участках и захоронениях, предоставляет поиск по ФИО и отображает информацию через удобный веб-интерфейс с интерактивной картой.
+    </p>
+  </div>
+
+  <!-- Quick Search Section -->
+  <div class="panel p-4 p-md-5 form-section">
+    <h2 class="h5 fw-semibold mb-4 text-center">
+      <span class="section-icon">🏛️</span>Поиск и навигация
+    </h2>
+    <div style="max-width: 800px; margin: 0 auto;">
+      <label class="form-label text-muted-soft">Выберите кладбище</label>
+      <select id="search" placeholder="Начните вводить…" autocomplete="off">
+        <option value="">Выберите кладбище…</option>
+        {% for item in cemeteries %}
+          <option value="{{ item.id }}">{{ item.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="d-flex flex-wrap gap-2 mt-3 justify-content-center">
+        <a class="btn btn-accent px-4" href="{% url 'map' %}">🗺️ Открыть карту</a>
+        <button id="open-cemetery" class="btn btn-outline-light px-4" type="button">📋 Открыть карточку</button>
+      </div>
+
+      <hr class="my-4 border-opacity-10">
+      <div class="d-flex flex-wrap align-items-center gap-2 justify-content-center text-center">
+        <div class="text-muted-soft">
+          Источник: <a href="https://data.mos.ru/opendata/64023/map?version=1&release=96" target="_blank" rel="noreferrer">data.mos.ru</a>
+        </div>
+        <button id="mosru-check" class="btn btn-sm btn-outline-light">Проверить доступ</button>
+        <span id="mosru-status" class="small-kbd"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Search Section -->
+  <div class="panel p-4 p-md-5 mt-4 form-section">
+    <h2 class="h4 fw-semibold mb-4 text-center">
+      <span class="section-icon">🔍</span>Поиск захоронений в Москве
+    </h2>
+    <form id="burial-search-form" class="row g-3">
+      <!-- Block 1: Main Parameters -->
+      <div class="col-12">
+        <div class="panel p-4" style="background: linear-gradient(135deg, rgba(108,228,255,.08) 0%, rgba(154,130,255,.05) 100%); border-color: rgba(108,228,255,.2);">
+          <div class="small-kbd mb-3">
+            <span class="section-icon">✓</span>Основные параметры поиска
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label text-muted-soft small">Фамилия, имя, отчество</label>
+              <input class="form-control" type="text" name="fio" placeholder="Например: Иванов Иван Иванович">
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label text-muted-soft small">Режим поиска</label>
+              <select class="form-select" name="search_mode">
+                <option value="">Начала всех слов совпадают</option>
+                <option>Совпадение в середине слов</option>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Год рождения</label>
+              <input class="form-control" type="text" name="birth_exact" placeholder="Точное значение">
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Рождение от</label>
+              <input class="form-control" type="text" name="birth_from" placeholder="От">
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Рождение до</label>
+              <input class="form-control" type="text" name="birth_to" placeholder="До">
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Год смерти</label>
+              <input class="form-control" type="text" name="death_exact" placeholder="Точное значение">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Block 2: Additional Parameters -->
+      <div class="col-12">
+        <div class="panel p-4" style="background: linear-gradient(135deg, rgba(154,130,255,.08) 0%, rgba(108,228,255,.05) 100%); border-color: rgba(154,130,255,.2);">
+          <div class="small-kbd mb-3">
+            <span class="section-icon">⚙️</span>Дополнительные параметры
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label text-muted-soft small">Второе имя / Отчество</label>
+              <input class="form-control" type="text" name="fio2" placeholder="Дополнительный поиск">
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label text-muted-soft small">Режим поиска</label>
+              <select class="form-select" name="search_mode2">
+                <option value="">Начала всех слов совпадают</option>
+                <option>Совпадение в середине слов</option>
+              </select>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Смерть от</label>
+              <input class="form-control" type="text" name="death_from" placeholder="От">
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Смерть до</label>
+              <input class="form-control" type="text" name="death_to" placeholder="До">
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Кладбище</label>
+              <select class="form-select" name="cemetery">
+                <option value="">Все кладбища</option>
+                {% for item in cemeteries %}
+                  <option value="{{ item.id }}">{{ item.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label text-muted-soft small">Номер участка</label>
+              <input class="form-control" type="text" name="sector" placeholder="Например: ЗИ/002/3.2">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="col-12 d-flex flex-wrap gap-2 mt-3 justify-content-center">
+        <button id="detail-search" class="btn btn-accent px-4" type="submit">🔎 Поиск</button>
+        <button id="detail-clear" class="btn btn-outline-light px-4" type="button">✕ Очистить</button>
+      </div>
+    </form>
+
+    <!-- Search Results Section (hidden by default) -->
+    <div id="search-results" class="mt-5 d-none">
+      <h3 class="h5 fw-semibold mb-3 text-center">📊 Результаты поиска захоронений</h3>
+      <div id="results-count" class="d-flex justify-content-end text-muted-soft small-kbd mb-2">Показаны записи: 0</div>
+      <div class="table-responsive">
+        <table class="table table-dark table-bordered align-middle mb-0">
+          <thead>
+            <tr>
+              <th>ФИО</th>
+              <th>Кладбище</th>
+              <th>Участок</th>
+              <th>Рождение</th>
+              <th>Смерть</th>
+              <th>Навигация</th>
+            </tr>
+          </thead>
+          <tbody id="results-body">
+            <tr>
+              <td colspan="6" class="text-center text-muted-soft">По вашему запросу данные не найдены. Попробуйте изменить параметры поиска.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Information Notes -->
+    <div id="search-notes" class="mt-5 text-muted-soft">
+      <h3 class="h6 text-light mb-3">ℹ️ Справка и примечания</h3>
+      <div class="row g-4">
+        <div class="col-12 col-md-6">
+          <h4 class="small-kbd text-light mb-2">Описание системы</h4>
+          <ul class="small mb-0">
+            <li>Поиск среди захоронений как подписанных (идентифицированных), так и неподписанных</li>
+            <li>Источник: портал открытых данных Московского правительства</li>
+            <li>Подписанных захоронений (включая семейные): ~1.9 млн</li>
+            <li>Общее количество захороненных: ~5.0 млн</li>
+          </ul>
+        </div>
+        <div class="col-12 col-md-6">
+          <h4 class="small-kbd text-light mb-2">Особенности данных</h4>
+          <ul class="small mb-0">
+            <li>Даты вида 31.12.XXXX часто означают переход на следующий год</li>
+            <li>Записи 31.12.1901 обычно соответствуют 1902 году</li>
+            <li>Участок — номер места захоронения, например: ЗИ/002/3.2/1219</li>
+            <li>Примеры поиска: Красновский, Иванов$, Иван~$</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    function escapeHtml(value) {
+      return (value || "").toString()
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    // Initialize TomSelect for cemetery dropdown
+    const select = new TomSelect("#search", {
+      create: false,
+      sortField: {field: "text", direction: "asc"},
+      maxOptions: 500,
+      allowEmptyOption: true
+    });
+
+    // Open Cemetery Button
+    const openBtn = document.getElementById("open-cemetery");
+    openBtn.addEventListener("click", () => {
+      const value = select.getValue();
+      if (!value) {
+        alert("Пожалуйста, выберите кладбище");
+        return;
+      }
+      window.location.href = "/cemetery/" + value + "/";
+    });
+
+    // Data.mos.ru Availability Check
+    const mosruBtn = document.getElementById("mosru-check");
+    const mosruStatus = document.getElementById("mosru-status");
+    mosruBtn.addEventListener("click", async () => {
+      mosruStatus.textContent = "проверка...";
+      try {
+        const response = await fetch("/api/mosru/64023/");
+        const data = await response.json();
+        mosruStatus.textContent = data.ok ? "✓ доступ" : ("✗ ошибка: " + (data.error || "unknown"));
+      } catch (error) {
+        mosruStatus.textContent = "✗ ошибка сети";
+      }
+    });
+
+    // Burial Search Form
+    const detailForm = document.getElementById("burial-search-form");
+    const detailClear = document.getElementById("detail-clear");
+    const notesBlock = document.getElementById("search-notes");
+    const resultsBlock = document.getElementById("search-results");
+    const resultsBody = document.getElementById("results-body");
+    const resultsCount = document.getElementById("results-count");
+
+    detailForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(detailForm);
+      const params = new URLSearchParams();
+      const fio = (formData.get("fio") || "").toString().trim();
+      const cemeteryId = (formData.get("cemetery") || "").toString().trim();
+      const sector = (formData.get("sector") || "").toString().trim();
+
+      if (fio) params.set("fio", fio);
+      if (cemeteryId) params.set("cemetery_id", cemeteryId);
+      if (sector) params.set("sector", sector);
+      params.set("limit", "200");
+
+      notesBlock.classList.add("d-none");
+      resultsBlock.classList.remove("d-none");
+      resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">Загрузка...</td></tr>`;
+      resultsCount.textContent = "Показаны записи: ...";
+
+      try {
+        const response = await fetch("/api/burials/search/?" + params.toString());
+        const items = await response.json();
+        if (!Array.isArray(items) || items.length === 0) {
+          resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">По вашему запросу данные не найдены. Попробуйте изменить параметры поиска.</td></tr>`;
+          resultsCount.textContent = "Показаны записи: 0";
+          return;
+        }
+
+        resultsCount.textContent = "Показаны записи: " + items.length;
+        const rows = items.map((item) => {
+          const status = item.has_tombstone_bool === true ? "Памятник есть" : (item.has_tombstone_bool === false ? "Памятника нет" : "Не указано");
+          const personLabel = escapeHtml(item.display_person || item.inscription_preview || "Без подписи");
+          const peopleMeta = item.people_count > 1 ? `<div class="small-kbd mt-1">+ ещё ${item.people_count - 1} чел. в этом захоронении</div>` : "";
+          return `
+            <tr>
+              <td>${personLabel}${peopleMeta}</td>
+              <td>${escapeHtml(item.cemetery_name || "—")}</td>
+              <td>${escapeHtml(item.grave_number || "—")}</td>
+              <td>${escapeHtml(item.birth_date || "—")}</td>
+              <td>${escapeHtml(item.death_date || "—")}</td>
+              <td>
+                <div class="d-flex flex-wrap gap-2">
+                  <a class="btn btn-sm btn-outline-light" href="/map/?burial_id=${item.id}">Показать могилу</a>
+                  <span class="small-kbd">${status}</span>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+        resultsBody.innerHTML = rows;
+      } catch (error) {
+        resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">Ошибка поиска. Проверьте подключение к базе.</td></tr>`;
+        resultsCount.textContent = "Показаны записи: 0";
+      }
+    });
+
+    detailClear.addEventListener("click", () => {
+      detailForm.reset();
+      notesBlock.classList.remove("d-none");
+      resultsBlock.classList.add("d-none");
+      resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">По вашему запросу данные не найдены. Попробуйте изменить параметры поиска.</td></tr>`;
+      resultsCount.textContent = "Показаны записи: 0";
+    });
+  </script>
+{% endblock %}
+
