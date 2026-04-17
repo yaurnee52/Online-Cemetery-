@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel p-4 p-md-5">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+      <div>
+        <h1 class="h3 fw-semibold mb-2">🗺️ Интерактивная карта</h1>
+        <p class="text-muted-soft mb-0">Москва. Обзор кладбищ по городу</p>
+      </div>
+      <a class="btn btn-outline-light btn-sm" href="{% url 'index' %}">← На главную</a>
+    </div>
+
+    <!-- 2GIS API Check Section -->
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-lg-8">
+        <label class="form-label text-muted-soft small">🔍 Проверка API 2GIS</label>
+        <input id="dgis-query" class="form-control" type="text" placeholder="Введите запрос, например: 'Хованское кладбище'">
+      </div>
+      <div class="col-12 col-lg-4 d-flex align-items-end">
+        <button id="dgis-check" class="btn btn-accent w-100" type="button">Проверить API</button>
+      </div>
+      <div class="col-12">
+        <div id="dgis-status" class="small-kbd text-muted-soft"></div>
+      </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map" style="height: 70vh; border-radius: 1rem; overflow: hidden; border: 1px solid var(--panel-border); box-shadow: 0 8px 24px rgba(8,12,28,.2);"></div>
+
+    <!-- Info -->
+    <div class="mt-4 text-muted-soft small">
+      <p class="mb-2">ℹ️ <strong>На карте отображены все кладбища Москвы</strong> с интерактивными маркерами. Нажмите на маркер, чтобы увидеть название кладбища и открыть его карточку.</p>
+      <p class="mb-0">🔗 Данные берутся из открытого источника data.mos.ru и отображаются через API 2GIS.</p>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://maps.api.2gis.ru/2.0/loader.js?pkg=full&key=c5e4d7ec-f9d0-470f-b7f0-278f622f20e2"></script>
+  <script>
+    const cemeteryMarkers = {{ markers_json|safe }};
+    const focusPoint = {{ focus_point_json|safe }};
+    
+    if (typeof DG !== 'undefined') {
+      DG.then(function () {
+        try {
+          const map = DG.map('map', {
+            center: [55.7558, 37.6173],
+            zoom: 10
+          });
+          if (Array.isArray(cemeteryMarkers) && cemeteryMarkers.length > 0) {
+            cemeteryMarkers.forEach((item) => {
+              if (item.lat != null && item.lon != null) {
+                const marker = DG.marker([item.lat, item.lon]).addTo(map);
+                marker.bindPopup(
+                  "<strong>" + item.name + "</strong><br><a href='/cemetery/" + item.id + "/'>Открыть карточку</a>"
+                );
+              }
+            });
+          }
+          if (focusPoint && focusPoint.lat != null && focusPoint.lon != null) {
+            map.setView([focusPoint.lat, focusPoint.lon], 16);
+            const graveMarker = DG.marker([focusPoint.lat, focusPoint.lon]).addTo(map);
+            const label = focusPoint.label || "Место захоронения";
+            graveMarker.bindPopup("<strong>" + label + "</strong><br>Точная точка могилы");
+            graveMarker.openPopup();
+          }
+        } catch (mapErr) {
+          console.error('Map initialization error:', mapErr);
+        }
+      });
+    } else {
+      console.error('DG API library not loaded');
+    }
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const queryInput = document.getElementById("dgis-query");
+      const checkBtn = document.getElementById("dgis-check");
+      const statusEl = document.getElementById("dgis-status");
+      
+      if (checkBtn && queryInput && statusEl) {
+        checkBtn.addEventListener("click", async () => {
+          const q = queryInput.value.trim();
+          if (!q) {
+            statusEl.textContent = "Введите поисковый запрос.";
+            return;
+          }
+          statusEl.textContent = "Запрос...";
+          try {
+            const r = await fetch("/api/2gis/search/?q=" + encodeURIComponent(q));
+            const j = await r.json();
+            if (!r.ok) {
+              statusEl.textContent = "Ошибка: " + (j.error || "не удалось выполнить запрос");
+              return;
+            }
+            const count = (j.result && j.result.items && Array.isArray(j.result.items)) ? j.result.items.length : 0;
+            statusEl.textContent = "API 2GIS: OK. Найдено: " + count;
+          } catch (e) {
+            console.error('API Error:', e);
+            statusEl.textContent = "Ошибка сети.";
+          }
+        });
+      }
+    });
+  </script>
+{% endblock %}
+
