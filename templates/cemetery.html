@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel p-4 p-md-5">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-5">
+      <div>
+        <h1 class="h3 fw-semibold mb-2">
+          {% if cemetery and cemetery.name %}
+            {{ cemetery.name }}
+          {% else %}
+            Кладбище #{{ cemetery_id }}
+          {% endif %}
+        </h1>
+        <p class="text-muted-soft mb-0">Подробная информация и статистика по кладбищу</p>
+      </div>
+      <a class="btn btn-outline-light btn-sm" href="{% url 'map' %}">← Назад к карте</a>
+    </div>
+
+    {% if not cemetery %}
+      <div class="alert alert-secondary" style="background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.10); color: var(--bone);">
+        ⚠️ Данные об этом кладбище отсутствуют в базе данных
+      </div>
+    {% else %}
+      <!-- Statistics Cards Section -->
+      <div class="mb-5">
+        <h2 class="h5 fw-semibold mb-4 text-center">📊 Статистика кладбища</h2>
+        
+        <!-- Stat Cards Row -->
+        <div class="row g-4 mb-5">
+          <!-- Burials Card -->
+          <div class="col-12 col-sm-6">
+            <div class="stat-card burials">
+              <div class="stat-icon">⚰️</div>
+              <div class="stat-number">{{ cemetery.burials_total|default:"—" }}</div>
+              <div class="stat-label">Всего захоронений</div>
+            </div>
+          </div>
+
+          <!-- People Card -->
+          <div class="col-12 col-sm-6">
+            <div class="stat-card people">
+              <div class="stat-icon">👤</div>
+              <div class="stat-number">{{ cemetery.people_total|default:"—" }}</div>
+              <div class="stat-label">Всего людей</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Statistics Tables -->
+        <div class="row g-4">
+          <!-- Burials Details -->
+          <div class="col-12 col-lg-6">
+            <div class="panel p-4" style="background: linear-gradient(135deg, rgba(108,228,255,.08) 0%, rgba(154,130,255,.05) 100%); border-color: rgba(108,228,255,.2);">
+              <h3 class="h6 fw-semibold mb-3">
+                <span style="font-size: 1.3rem; margin-right: 0.5rem;">⚰️</span>Подробно: Захоронения
+              </h3>
+              <div class="table-responsive">
+                <table class="table table-sm table-dark table-borderless align-middle mb-0">
+                  <tbody>
+                    <tr class="border-bottom" style="border-color: rgba(255,255,255,.08) !important;">
+                      <td class="text-muted-soft fw-500 py-3">Подписанные</td>
+                      <td class="text-end fw-semibold py-3" style="color: var(--accent);">
+                        {{ cemetery.burials_signed|default:"—" }}
+                      </td>
+                    </tr>
+                    <tr class="border-bottom" style="border-color: rgba(255,255,255,.08) !important;">
+                      <td class="text-muted-soft fw-500 py-3">Неподписанные</td>
+                      <td class="text-end fw-semibold py-3" style="color: var(--accent-2);">
+                        {{ cemetery.burials_unsigned|default:"—" }}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="text-light fw-semibold py-3">Итого</td>
+                      <td class="text-end fw-bold py-3" style="font-size: 1.1rem; color: var(--accent);">
+                        {{ cemetery.burials_total|default:"—" }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- People Details -->
+          <div class="col-12 col-lg-6">
+            <div class="panel p-4" style="background: linear-gradient(135deg, rgba(154,130,255,.08) 0%, rgba(108,228,255,.05) 100%); border-color: rgba(154,130,255,.2);">
+              <h3 class="h6 fw-semibold mb-3">
+                <span style="font-size: 1.3rem; margin-right: 0.5rem;">👤</span>Подробно: Люди
+              </h3>
+              <div class="table-responsive">
+                <table class="table table-sm table-dark table-borderless align-middle mb-0">
+                  <tbody>
+                    <tr class="border-bottom" style="border-color: rgba(255,255,255,.08) !important;">
+                      <td class="text-muted-soft fw-500 py-3">Подписанные</td>
+                      <td class="text-end fw-semibold py-3" style="color: var(--accent);">
+                        {{ cemetery.people_signed|default:"—" }}
+                      </td>
+                    </tr>
+                    <tr class="border-bottom" style="border-color: rgba(255,255,255,.08) !important;">
+                      <td class="text-muted-soft fw-500 py-3">Неподписанные</td>
+                      <td class="text-end fw-semibold py-3" style="color: var(--accent-2);">
+                        {{ cemetery.people_unsigned|default:"—" }}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="text-light fw-semibold py-3">Итого</td>
+                      <td class="text-end fw-bold py-3" style="font-size: 1.1rem; color: var(--accent-2);">
+                        {{ cemetery.people_total|default:"—" }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Burials List Section -->
+      <div>
+        <h2 class="h5 fw-semibold mb-3">📋 Список захороненных</h2>
+        <p class="text-muted-soft mb-3 small">Поиск по ФИО и номеру участка только внутри этого кладбища.</p>
+        <form id="cemetery-search-form" class="row g-2 mb-4">
+          <div class="col-12 col-md-7">
+            <input id="cemetery-fio" class="form-control" type="text" placeholder="ФИО: например, Введенский Михаил">
+          </div>
+          <div class="col-12 col-md-3">
+            <input id="cemetery-sector" class="form-control" type="text" placeholder="Участок: ЗИ/002/3.2">
+          </div>
+          <div class="col-12 col-md-2 d-grid">
+            <button class="btn btn-accent" type="submit">Поиск</button>
+          </div>
+        </form>
+        <div class="table-responsive">
+          <table class="table table-dark table-bordered table-hover align-middle mb-0">
+            <thead>
+              <tr style="background: rgba(108,228,255,.08);">
+                <th class="text-light">ФИО</th>
+                <th class="text-light">Участок</th>
+                <th class="text-light">ID</th>
+                <th class="text-light">Рождение</th>
+                <th class="text-light">Смерть</th>
+                <th class="text-light">Навигация</th>
+              </tr>
+            </thead>
+            <tbody id="cemetery-burials-body">
+              <tr>
+                <td colspan="6" class="text-center text-muted-soft py-4">
+                  ℹ️ Загрузка данных...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    function escapeHtml(value) {
+      return (value || "").toString()
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    async function loadCemeteryBurials() {
+      const tbody = document.getElementById("cemetery-burials-body");
+      if (!tbody) return;
+      const fio = document.getElementById("cemetery-fio")?.value?.trim() || "";
+      const sector = document.getElementById("cemetery-sector")?.value?.trim() || "";
+      const params = new URLSearchParams({ limit: "400" });
+      if (fio) params.set("fio", fio);
+      if (sector) params.set("sector", sector);
+      try {
+        const response = await fetch("/api/cemeteries/{{ cemetery_id }}/burials/?" + params.toString());
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (items.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" class="text-center text-muted-soft py-4">
+                ℹ️ По этому кладбищу в таблице захоронений пока нет записей.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = items.map((item) => {
+          const status = item.has_tombstone_bool === true ? "Памятник есть" : (item.has_tombstone_bool === false ? "Памятника нет" : "Не указано");
+          const personLabel = escapeHtml(item.display_person || item.inscription_preview || "Без подписи");
+          const peopleMeta = item.people_count > 1 ? `<div class="small-kbd mt-1">+ ещё ${item.people_count - 1} чел. в этом захоронении</div>` : "";
+          return `
+            <tr>
+              <td>${personLabel}${peopleMeta}</td>
+              <td>${escapeHtml(item.grave_number || "—")}</td>
+              <td>${escapeHtml(item.global_id ? String(item.global_id) : "—")}</td>
+              <td>${escapeHtml(item.birth_date || "—")}</td>
+              <td>${escapeHtml(item.death_date || "—")}</td>
+              <td>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <a class="btn btn-sm btn-outline-light" href="/map/?burial_id=${item.id}">На карте</a>
+                  <span class="small-kbd">${status}</span>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      } catch (error) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-muted-soft py-4">
+              ⚠️ Не удалось загрузить список захоронений. Проверьте подключение к PostgreSQL.
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadCemeteryBurials);
+    document.getElementById("cemetery-search-form")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      loadCemeteryBurials();
+    });
+  </script>
+{% endblock %}
+
