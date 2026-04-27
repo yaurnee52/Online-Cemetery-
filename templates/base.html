@@ -31,19 +31,19 @@
       html[data-theme="light"]{
         --ink:#ffffff;
         --fog:#f5f7fa;
-        --bone:#1a1f36;
-        --muted:#666b85;
+        --bone:#17203b;
+        --muted:#3f4c73;
         --accent:#0066cc;
         --accent-2:#0052a3;
         --body-bg: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
-        --body-color: #1a1f36;
+        --body-color: #17203b;
         --panel-bg: rgba(255,255,255,.95);
-        --panel-border: rgba(0,0,0,.08);
+        --panel-border: rgba(18,32,65,.14);
         --navbar-bg: rgba(255,255,255,.95);
-        --navbar-border: rgba(0,0,0,.06);
-        --form-bg: rgba(245,247,250,.8);
-        --form-border: rgba(0,0,0,.12);
-        --form-text: #1a1f36;
+        --navbar-border: rgba(18,32,65,.1);
+        --form-bg: #ffffff;
+        --form-border: rgba(18,32,65,.2);
+        --form-text: #17203b;
       }
 
       html[data-theme="light"] a{
@@ -147,8 +147,11 @@
       }
 
       html[data-theme="light"] .hero-section{
-        background: linear-gradient(135deg, rgba(0, 40, 100, 0.85) 0%, rgba(0, 30, 80, 0.85) 100%),
-                    linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+        background-image: url('{% static "images/pic.jpg" %}'),
+                          linear-gradient(135deg, rgba(0, 40, 100, 0.62) 0%, rgba(0, 30, 80, 0.62) 100%),
+                          linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+        background-size: cover;
+        background-position: center;
         box-shadow: 0 8px 24px rgba(0,102,204,.15);
       }
 
@@ -212,6 +215,17 @@
         color: white;
       }
 
+      html[data-theme="light"] .btn-outline-light{
+        color: #1b2a4d;
+        border-color: rgba(27,42,77,.28);
+      }
+
+      html[data-theme="light"] .btn-outline-light:hover{
+        color: #0f1a33;
+        background: rgba(20, 52, 120, 0.08);
+        border-color: rgba(27,42,77,.4);
+      }
+
       .btn-outline-light{
         transition: all 0.3s ease;
       }
@@ -227,8 +241,8 @@
       }
 
       html[data-theme="light"] .table-dark{
-        --bs-table-bg: rgba(245,247,250,.6);
-        --bs-table-border-color: rgba(0,0,0,.08);
+        --bs-table-bg: rgba(255,255,255,.96);
+        --bs-table-border-color: rgba(18,32,65,.14);
         --bs-table-color: #1a1f36;
       }
 
@@ -249,7 +263,7 @@
       }
 
       html[data-theme="light"] .form-control::placeholder{
-        color: rgba(26, 31, 54, .6) !important;
+        color: rgba(23, 32, 59, .55) !important;
       }
 
       .form-select{
@@ -423,6 +437,53 @@
         font-size: 1.5rem;
         margin-right: 0.5rem;
         vertical-align: middle;
+      }
+
+      .search-block{
+        border: 1px solid transparent;
+      }
+
+      .search-block-primary{
+        background: linear-gradient(135deg, rgba(108,228,255,.08) 0%, rgba(154,130,255,.05) 100%);
+        border-color: rgba(108,228,255,.2);
+      }
+
+      .search-block-secondary{
+        background: linear-gradient(135deg, rgba(154,130,255,.08) 0%, rgba(108,228,255,.05) 100%);
+        border-color: rgba(154,130,255,.2);
+      }
+
+      .hero-description-panel{
+        background: rgba(25, 35, 65, 0.75);
+        border-color: rgba(108, 228, 255, 0.2);
+      }
+
+      html[data-theme="light"] .hero-description-panel{
+        background: rgba(255,255,255,.96);
+        border-color: rgba(18,32,65,.16);
+      }
+
+      html[data-theme="light"] .search-block-primary{
+        background: linear-gradient(135deg, rgba(0,102,204,.07) 0%, rgba(0,82,163,.04) 100%);
+        border-color: rgba(18,32,65,.15);
+      }
+
+      html[data-theme="light"] .search-block-secondary{
+        background: linear-gradient(135deg, rgba(0,82,163,.07) 0%, rgba(0,102,204,.04) 100%);
+        border-color: rgba(18,32,65,.15);
+      }
+
+      html[data-theme="light"] .navbar-brand,
+      html[data-theme="light"] .nav-link{
+        color: #1b2a4d !important;
+      }
+
+      html[data-theme="light"] .nav-link:hover{
+        color: #004c99 !important;
+      }
+
+      html[data-theme="light"] #search-notes .text-light{
+        color: #1b2a4d !important;
       }
     </style>
   </head>

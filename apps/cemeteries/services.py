@@ -11,11 +11,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Optional
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q
 
 from .models import Burial, BurialPerson, Cemetery
 
@@ -96,6 +95,7 @@ class PersonHit:
     burial: Burial
     person: BurialPerson
     people_count: int
+    fio_query: str = ""
 
     def to_dict(self) -> dict:
         text = self.burial.inscription or ""
@@ -107,6 +107,7 @@ class PersonHit:
             birth_date, death_date = extract_life_dates(self.person.person_name)
         if not (birth_year or death_year):
             birth_year, death_year = extract_years(self.person.person_name)
+        display_person = extract_display_person(self.person.person_name, fio_query=self.fio_query)
         return {
             "id": self.burial.id,
             "grave_number": self.burial.grave_number,
@@ -114,7 +115,7 @@ class PersonHit:
             "has_tombstone_bool": self.burial.has_tombstone,
             "inscription": text,
             "inscription_preview": normalize_inscription_preview(text),
-            "display_person": self.person.person_name,
+            "display_person": display_person,
             "people_count": max(1, self.people_count),
             "cemetery_name": self.burial.cemetery.name if self.burial.cemetery_id else "",
             "global_id": self.burial.global_id,
@@ -139,9 +140,16 @@ def _bool_to_legacy(value: Optional[bool]) -> Optional[str]:
 def search_person_hits(
     *,
     fio: str | None = None,
+    search_mode: str | None = None,
     cemetery_id: int | None = None,
     cemetery_name: str | None = None,
     sector: str | None = None,
+    birth_year_exact: int | None = None,
+    birth_year_from: int | None = None,
+    birth_year_to: int | None = None,
+    death_year_exact: int | None = None,
+    death_year_from: int | None = None,
+    death_year_to: int | None = None,
     limit: int = 100,
     min_limit: int = 1,
     max_limit: int = 1000,
@@ -156,8 +164,7 @@ def search_person_hits(
     )
 
     fio_query = (fio or "").strip()
-    if fio_query:
-        qs = qs.filter(person_name__icontains=fio_query)
+    qs = _apply_fio_filter(qs, fio_query=fio_query, search_mode=search_mode)
 
     if cemetery_id:
         qs = qs.filter(burial__cemetery_id=cemetery_id)
@@ -167,34 +174,164 @@ def search_person_hits(
     if sector and sector.strip():
         qs = qs.filter(burial__grave_number__icontains=sector.strip())
 
+    qs = _apply_year_filters(
+        qs,
+        birth_year_exact=birth_year_exact,
+        birth_year_from=birth_year_from,
+        birth_year_to=birth_year_to,
+        death_year_exact=death_year_exact,
+        death_year_from=death_year_from,
+        death_year_to=death_year_to,
+    )
+
     rows = list(qs[:safe_limit])
-    counts = _people_counts_per_burial([row.burial_id for row in rows])
+    items: list[dict] = []
+    seen: set[tuple[int, str, str, str]] = set()
+    for row in rows:
+        payload = PersonHit(
+            burial=row.burial,
+            person=row,
+            people_count=1,
+            fio_query=fio_query,
+        ).to_dict()
+        key = (
+            int(row.burial_id),
+            (payload.get("display_person") or "").strip().lower(),
+            str(payload.get("birth_date") or ""),
+            str(payload.get("death_date") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(payload)
+    return items
 
-    return [
-        PersonHit(burial=row.burial, person=row, people_count=counts.get(row.burial_id, 1)).to_dict()
-        for row in rows
-    ]
 
-
-def count_person_hits(*, cemetery_id: int, fio: str | None, sector: str | None) -> int:
+def count_person_hits(
+    *,
+    cemetery_id: int,
+    fio: str | None,
+    search_mode: str | None = None,
+    sector: str | None,
+    birth_year_exact: int | None = None,
+    birth_year_from: int | None = None,
+    birth_year_to: int | None = None,
+    death_year_exact: int | None = None,
+    death_year_from: int | None = None,
+    death_year_to: int | None = None,
+) -> int:
     qs = BurialPerson.objects.filter(burial__cemetery_id=cemetery_id)
-    if fio and fio.strip():
-        qs = qs.filter(person_name__icontains=fio.strip())
+    qs = _apply_fio_filter(qs, fio_query=(fio or "").strip(), search_mode=search_mode)
     if sector and sector.strip():
         qs = qs.filter(burial__grave_number__icontains=sector.strip())
+    qs = _apply_year_filters(
+        qs,
+        birth_year_exact=birth_year_exact,
+        birth_year_from=birth_year_from,
+        birth_year_to=birth_year_to,
+        death_year_exact=death_year_exact,
+        death_year_from=death_year_from,
+        death_year_to=death_year_to,
+    )
     return qs.count()
 
 
-def _people_counts_per_burial(burial_ids: Iterable[int]) -> dict[int, int]:
-    unique = sorted({int(b) for b in burial_ids if b is not None})
-    if not unique:
-        return {}
-    rows = (
-        BurialPerson.objects.filter(burial_id__in=unique)
-        .values("burial_id")
-        .annotate(cnt=Count("id"))
+def _apply_fio_filter(qs, *, fio_query: str, search_mode: str | None):
+    if not fio_query:
+        return qs
+    tokens = [token.strip() for token in re.split(r"\s+", fio_query.lower()) if token.strip()]
+    if not tokens:
+        return qs
+
+    is_contains_mode = (search_mode or "").strip().lower() in {"contains", "middle", "substring"}
+    if is_contains_mode:
+        for token in tokens:
+            qs = qs.filter(person_name__icontains=token)
+        return qs
+
+    # Точный режим по словам: каждое слово должно встретиться отдельно, не как часть другого.
+    for token in tokens:
+        pattern = rf"(^|[\s,;]){re.escape(token)}([\s,;]|$)"
+        qs = qs.filter(person_name__iregex=pattern)
+    return qs
+
+
+def _apply_year_filters(
+    qs,
+    *,
+    birth_year_exact: int | None,
+    birth_year_from: int | None,
+    birth_year_to: int | None,
+    death_year_exact: int | None,
+    death_year_from: int | None,
+    death_year_to: int | None,
+):
+    if birth_year_exact is not None:
+        qs = qs.filter(birth_year=birth_year_exact)
+    else:
+        if birth_year_from is not None:
+            qs = qs.filter(birth_year__gte=birth_year_from)
+        if birth_year_to is not None:
+            qs = qs.filter(birth_year__lte=birth_year_to)
+
+    if death_year_exact is not None:
+        qs = qs.filter(death_year=death_year_exact)
+    else:
+        if death_year_from is not None:
+            qs = qs.filter(death_year__gte=death_year_from)
+        if death_year_to is not None:
+            qs = qs.filter(death_year__lte=death_year_to)
+    return qs
+
+
+def extract_display_person(raw_person: str | None, fio_query: str = "") -> str:
+    """Чистый display ФИО без дат/технических хвостов.
+
+    В legacy данных в person_name иногда лежит несколько людей в одной строке.
+    Здесь аккуратно выделяем один кандидат и убираем даты.
+    """
+    candidates = _split_person_candidates(raw_person)
+    if not candidates:
+        return ""
+    if not fio_query.strip():
+        return candidates[0]
+
+    tokens = [t for t in re.split(r"\s+", fio_query.lower().strip()) if t]
+    best = candidates[0]
+    best_score = -1
+    for candidate in candidates:
+        low = candidate.lower()
+        score = sum(1 for t in tokens if re.search(rf"(^|[\s-]){re.escape(t)}([\s-]|$)", low))
+        if score > best_score:
+            best = candidate
+            best_score = score
+    return best
+
+
+def _split_person_candidates(raw_person: str | None) -> list[str]:
+    if not raw_person:
+        return []
+    text = str(raw_person).replace("\r", "\n")
+    text = text.replace(";", "\n")
+    # Частый кейс: "...11.07.1986,ИНЮШИНА ..." — делим на отдельные строки.
+    text = re.sub(
+        r"(?<=\d{2}\.\d{2}\.\d{4})\s*,\s*(?=[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){1,2}\b)",
+        "\n",
+        text,
     )
-    return {row["burial_id"]: row["cnt"] for row in rows}
+
+    result: list[str] = []
+    for chunk in (line.strip(" ,\t") for line in text.splitlines()):
+        if not chunk:
+            continue
+        chunk = _INSCRIPTION_TOKEN_RE.sub("", chunk, count=1)
+        chunk = _DATE_RE.sub("", chunk)
+        chunk = _YEAR_RE.sub("", chunk)
+        chunk = re.sub(r"\s*,\s*", " ", chunk)
+        chunk = re.sub(r"\s+", " ", chunk).strip(" ,.-")
+        if chunk:
+            result.append(chunk)
+    return result
 
 
 # ---------------------------------------------------------------------------
