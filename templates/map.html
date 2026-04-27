@@ -5,23 +5,25 @@
     <!-- Header -->
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
       <div>
-        <h1 class="h3 fw-semibold mb-2">🗺️ Интерактивная карта</h1>
-        <p class="text-muted-soft mb-0">Москва. Обзор кладбищ по городу</p>
+        <h1 class="h4 fw-semibold mb-2">Карта кладбищ Москвы</h1>
+        <p class="text-muted-soft mb-0">Поиск кладбища и переход к карточке</p>
       </div>
       <a class="btn btn-outline-light btn-sm" href="{% url 'index' %}">← На главную</a>
     </div>
 
-    <!-- 2GIS API Check Section -->
-    <div class="row g-3 mb-4">
-      <div class="col-12 col-lg-8">
-        <label class="form-label text-muted-soft small">🔍 Проверка API 2GIS</label>
-        <input id="dgis-query" class="form-control" type="text" placeholder="Введите запрос, например: 'Хованское кладбище'">
-      </div>
-      <div class="col-12 col-lg-4 d-flex align-items-end">
-        <button id="dgis-check" class="btn btn-accent w-100" type="button">Проверить API</button>
-      </div>
-      <div class="col-12">
-        <div id="dgis-status" class="small-kbd text-muted-soft"></div>
+    <!-- Cemetery Search -->
+    <div class="panel p-4 search-block search-block-primary mb-4">
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <label class="form-label text-muted-soft small">Поиск кладбища</label>
+          <select id="map-cemetery-search" placeholder="Начните вводить..." autocomplete="off">
+            <option value="">Выберите кладбище...</option>
+          </select>
+        </div>
+        <div class="col-12 col-lg-4 d-flex align-items-end gap-2">
+          <button id="map-focus-cemetery" class="btn btn-accent w-100" type="button">Показать на карте</button>
+          <button id="map-open-cemetery" class="btn btn-outline-light w-100" type="button">Открыть карточку</button>
+        </div>
       </div>
     </div>
 
@@ -30,8 +32,7 @@
 
     <!-- Info -->
     <div class="mt-4 text-muted-soft small">
-      <p class="mb-2">ℹ️ <strong>На карте отображены все кладбища Москвы</strong> с интерактивными маркерами. Нажмите на маркер, чтобы увидеть название кладбища и открыть его карточку.</p>
-      <p class="mb-0">🔗 Данные берутся из открытого источника data.mos.ru и отображаются через API 2GIS.</p>
+      <p class="mb-0">На карте отображены кладбища Москвы. Выберите кладбище в поле поиска или нажмите на маркер.</p>
     </div>
   </div>
 {% endblock %}
@@ -42,26 +43,30 @@
     const cemeteryMarkers = {{ markers_json|safe }};
     const focusPoint = {{ focus_point_json|safe }};
     
+    let mapInstance = null;
+    const markerById = new Map();
+
     if (typeof DG !== 'undefined') {
       DG.then(function () {
         try {
-          const map = DG.map('map', {
+          mapInstance = DG.map('map', {
             center: [55.7558, 37.6173],
             zoom: 10
           });
           if (Array.isArray(cemeteryMarkers) && cemeteryMarkers.length > 0) {
             cemeteryMarkers.forEach((item) => {
               if (item.lat != null && item.lon != null) {
-                const marker = DG.marker([item.lat, item.lon]).addTo(map);
+                const marker = DG.marker([item.lat, item.lon]).addTo(mapInstance);
                 marker.bindPopup(
                   "<strong>" + item.name + "</strong><br><a href='/cemetery/" + item.id + "/'>Открыть карточку</a>"
                 );
+                markerById.set(String(item.id), marker);
               }
             });
           }
           if (focusPoint && focusPoint.lat != null && focusPoint.lon != null) {
-            map.setView([focusPoint.lat, focusPoint.lon], 16);
-            const graveMarker = DG.marker([focusPoint.lat, focusPoint.lon]).addTo(map);
+            mapInstance.setView([focusPoint.lat, focusPoint.lon], 16);
+            const graveMarker = DG.marker([focusPoint.lat, focusPoint.lon]).addTo(mapInstance);
             const label = focusPoint.label || "Место захоронения";
             graveMarker.bindPopup("<strong>" + label + "</strong><br>Точная точка могилы");
             graveMarker.openPopup();
@@ -76,33 +81,42 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      const queryInput = document.getElementById("dgis-query");
-      const checkBtn = document.getElementById("dgis-check");
-      const statusEl = document.getElementById("dgis-status");
-      
-      if (checkBtn && queryInput && statusEl) {
-        checkBtn.addEventListener("click", async () => {
-          const q = queryInput.value.trim();
-          if (!q) {
-            statusEl.textContent = "Введите поисковый запрос.";
-            return;
-          }
-          statusEl.textContent = "Запрос...";
-          try {
-            const r = await fetch("/api/2gis/search/?q=" + encodeURIComponent(q));
-            const j = await r.json();
-            if (!r.ok) {
-              statusEl.textContent = "Ошибка: " + (j.error || "не удалось выполнить запрос");
-              return;
-            }
-            const count = (j.result && j.result.items && Array.isArray(j.result.items)) ? j.result.items.length : 0;
-            statusEl.textContent = "API 2GIS: OK. Найдено: " + count;
-          } catch (e) {
-            console.error('API Error:', e);
-            statusEl.textContent = "Ошибка сети.";
-          }
-        });
-      }
+      const selectEl = document.getElementById("map-cemetery-search");
+      const focusBtn = document.getElementById("map-focus-cemetery");
+      const openBtn = document.getElementById("map-open-cemetery");
+      if (!selectEl) return;
+
+      const options = cemeteryMarkers
+        .slice()
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"))
+        .map((item) => ({ value: String(item.id), text: item.name || `Кладбище #${item.id}` }));
+
+      const ts = new TomSelect(selectEl, {
+        create: false,
+        options,
+        sortField: { field: "text", direction: "asc" },
+        maxOptions: 1000,
+        allowEmptyOption: true
+      });
+
+      focusBtn?.addEventListener("click", () => {
+        const value = ts.getValue();
+        if (!value) return;
+        const marker = markerById.get(String(value));
+        if (!marker || !mapInstance) return;
+        const latLng = marker.getLatLng();
+        mapInstance.setView([latLng.lat, latLng.lng], 14);
+        marker.openPopup();
+      });
+
+      openBtn?.addEventListener("click", () => {
+        const value = ts.getValue();
+        if (!value) {
+          alert("Пожалуйста, выберите кладбище");
+          return;
+        }
+        window.location.href = "/cemetery/" + value + "/";
+      });
     });
   </script>
 {% endblock %}

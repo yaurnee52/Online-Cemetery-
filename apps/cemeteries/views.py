@@ -9,7 +9,6 @@ import json
 
 from django.conf import settings
 from django.db.models import QuerySet
-from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -49,17 +48,36 @@ class CemeteryViewSet(viewsets.ReadOnlyModelViewSet):
         """Захоронения внутри кладбища с фильтрами FIO и участка."""
         cemetery = self.get_object()
         fio = request.query_params.get("fio")
+        search_mode = request.query_params.get("search_mode")
         sector = request.query_params.get("sector")
         limit = int(request.query_params.get("limit") or 200)
 
         items = services.search_person_hits(
             fio=fio,
+            search_mode=search_mode,
             cemetery_id=cemetery.id,
             sector=sector,
+            birth_year_exact=_to_int(request.query_params.get("birth_exact")),
+            birth_year_from=_to_int(request.query_params.get("birth_from")),
+            birth_year_to=_to_int(request.query_params.get("birth_to")),
+            death_year_exact=_to_int(request.query_params.get("death_exact")),
+            death_year_from=_to_int(request.query_params.get("death_from")),
+            death_year_to=_to_int(request.query_params.get("death_to")),
             limit=limit,
             max_limit=2000,
         )
-        total = services.count_person_hits(cemetery_id=cemetery.id, fio=fio, sector=sector)
+        total = services.count_person_hits(
+            cemetery_id=cemetery.id,
+            fio=fio,
+            search_mode=search_mode,
+            sector=sector,
+            birth_year_exact=_to_int(request.query_params.get("birth_exact")),
+            birth_year_from=_to_int(request.query_params.get("birth_from")),
+            birth_year_to=_to_int(request.query_params.get("birth_to")),
+            death_year_exact=_to_int(request.query_params.get("death_exact")),
+            death_year_from=_to_int(request.query_params.get("death_from")),
+            death_year_to=_to_int(request.query_params.get("death_to")),
+        )
         return Response({"items": items, "total": total})
 
     @action(detail=False, methods=["get"], url_path="markers")
@@ -105,9 +123,16 @@ class BurialViewSet(viewsets.ReadOnlyModelViewSet):
 
         items = services.search_person_hits(
             fio=params.get("fio"),
+            search_mode=params.get("search_mode"),
             cemetery_id=cemetery_id_int,
             cemetery_name=params.get("cemetery"),
             sector=params.get("sector"),
+            birth_year_exact=_to_int(params.get("birth_exact")),
+            birth_year_from=_to_int(params.get("birth_from")),
+            birth_year_to=_to_int(params.get("birth_to")),
+            death_year_exact=_to_int(params.get("death_exact")),
+            death_year_from=_to_int(params.get("death_from")),
+            death_year_to=_to_int(params.get("death_to")),
             limit=int(params.get("limit") or 100),
             max_limit=500,
         )
@@ -223,3 +248,10 @@ class CemeteryDetailView(TemplateView):
             }
         )
         return ctx
+
+
+def _to_int(value: str | None) -> int | None:
+    try:
+        return int(str(value).strip()) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
