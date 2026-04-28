@@ -47,7 +47,12 @@
           return;
         }
         window.ocAuth.ocSetTokens(data.access, data.refresh);
+        const profile = await window.ocAuth.ocRefreshProfile();
         window.ocAuth.syncAuthNav();
+        if (profile?.is_staff) {
+          window.location.href = "/admin/";
+          return;
+        }
         window.location.href = "{% url 'cabinet-page' %}";
       } catch (err) {
         statusEl.textContent = "Сеть недоступна";

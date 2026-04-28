@@ -38,10 +38,11 @@ class RegistrationSerializer(serializers.Serializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username")
     email = serializers.EmailField(source="user.email", allow_blank=True, required=False)
+    is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
 
     class Meta:
         model = UserProfile
-        fields = ("username", "email", "role", "display_name", "phone", "bio")
+        fields = ("username", "email", "role", "display_name", "phone", "bio", "is_staff")
         read_only_fields = ("role",)
 
     def update(self, instance, validated_data):
