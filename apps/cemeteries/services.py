@@ -151,11 +151,13 @@ def search_person_hits(
     death_year_from: int | None = None,
     death_year_to: int | None = None,
     limit: int = 100,
+    offset: int = 0,
     min_limit: int = 1,
     max_limit: int = 1000,
 ) -> list[dict]:
     """Возвращает плоский список «попаданий» person+burial для UI."""
     safe_limit = max(min_limit, min(int(limit or 0), max_limit))
+    safe_offset = max(0, int(offset or 0))
 
     qs = (
         BurialPerson.objects
@@ -184,7 +186,7 @@ def search_person_hits(
         death_year_to=death_year_to,
     )
 
-    rows = list(qs[:safe_limit])
+    rows = list(qs[safe_offset : safe_offset + safe_limit])
     items: list[dict] = []
     seen: set[tuple[int, str, str, str]] = set()
     for row in rows:
@@ -209,9 +211,10 @@ def search_person_hits(
 
 def count_person_hits(
     *,
-    cemetery_id: int,
+    cemetery_id: int | None = None,
     fio: str | None,
     search_mode: str | None = None,
+    cemetery_name: str | None = None,
     sector: str | None,
     birth_year_exact: int | None = None,
     birth_year_from: int | None = None,
@@ -220,7 +223,11 @@ def count_person_hits(
     death_year_from: int | None = None,
     death_year_to: int | None = None,
 ) -> int:
-    qs = BurialPerson.objects.filter(burial__cemetery_id=cemetery_id)
+    qs = BurialPerson.objects.all()
+    if cemetery_id:
+        qs = qs.filter(burial__cemetery_id=cemetery_id)
+    elif cemetery_name and cemetery_name.strip():
+        qs = qs.filter(burial__cemetery__name__icontains=cemetery_name.strip())
     qs = _apply_fio_filter(qs, fio_query=(fio or "").strip(), search_mode=search_mode)
     if sector and sector.strip():
         qs = qs.filter(burial__grave_number__icontains=sector.strip())

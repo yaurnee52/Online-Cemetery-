@@ -1,0 +1,559 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel p-4 p-md-5 form-section">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+      <div>
+        <h1 class="h4 fw-semibold mb-1">Личный кабинет</h1>
+        <div class="text-muted-soft small">Заказы, чат, уведомления, подписки и донаты.</div>
+      </div>
+    </div>
+
+    <ul class="nav nav-pills mb-4" id="cabinet-tabs">
+      <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2" data-tab="orders">Мои заказы</button></li>
+      <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2" data-tab="notifications">Уведомления</button></li>
+      <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2" data-tab="subscriptions">Подписки</button></li>
+      <li class="nav-item"><button class="btn btn-outline-light btn-sm" data-tab="donations">Донаты</button></li>
+    </ul>
+
+    <div class="panel p-3 search-block search-block-secondary mb-4">
+      <div class="h6 mb-3">Профиль</div>
+      <form id="profile-form" class="row g-2">
+        <div class="col-12 col-md-4"><input name="username" class="form-control" placeholder="Username"></div>
+        <div class="col-12 col-md-4"><input name="email" class="form-control" placeholder="Email"></div>
+        <div class="col-12 col-md-4"><input name="display_name" class="form-control" placeholder="Имя для отображения"></div>
+        <div class="col-12 col-md-4"><input name="phone" class="form-control" placeholder="Телефон"></div>
+        <div class="col-12 col-md-8"><input name="bio" class="form-control" placeholder="О себе"></div>
+        <div class="col-12 d-grid"><button class="btn btn-accent" type="submit">Сохранить профиль</button></div>
+      </form>
+      <div id="profile-status" class="small-kbd mt-2"></div>
+      <hr>
+      <form id="password-form" class="row g-2">
+        <div class="col-12 col-md-5"><input name="current_password" type="password" class="form-control" placeholder="Текущий пароль"></div>
+        <div class="col-12 col-md-5"><input name="new_password" type="password" class="form-control" placeholder="Новый пароль"></div>
+        <div class="col-12 col-md-2 d-grid"><button class="btn btn-outline-light" type="submit">Сменить</button></div>
+      </form>
+      <div id="password-status" class="small-kbd mt-2"></div>
+    </div>
+
+    <div class="panel p-3 search-block search-block-primary mb-4">
+      <div class="h6 mb-3">Создать заказ</div>
+      <form id="order-create-form" class="row g-2">
+        <div class="col-12 col-lg-3">
+          <input name="burial" class="form-control" placeholder="ID захоронения" value="{{ new_burial }}">
+        </div>
+        <div class="col-12 col-lg-3">
+          <select id="service-type-select" name="service_type" class="form-select"></select>
+        </div>
+        <div class="col-12 col-lg-3 d-none">
+          <select id="executor-select" name="executor" class="form-select">
+            <option value="">Исполнитель не выбран</option>
+          </select>
+        </div>
+        <div class="col-12 col-lg-3">
+          <input name="description" class="form-control" placeholder="Комментарий к заказу">
+        </div>
+        <div class="col-12 col-lg-3 d-grid">
+          <button class="btn btn-accent" type="submit">Создать</button>
+        </div>
+      </form>
+      <div id="order-create-status" class="small-kbd mt-2"></div>
+      <div id="executor-preview" class="mt-3"></div>
+      <div id="executor-cards" class="row g-3 mt-1"></div>
+    </div>
+
+    <div class="panel p-3 search-block search-block-secondary mb-4 d-none" id="executor-offers-panel">
+      <div class="h6 mb-3">Мои услуги и фикс-цены</div>
+      <form id="executor-offer-form" class="row g-2 mb-3">
+        <div class="col-12 col-md-5">
+          <select id="executor-service-select" name="service_type" class="form-select"></select>
+        </div>
+        <div class="col-12 col-md-4">
+          <input name="fixed_price" class="form-control" placeholder="Фикс-цена (RUB)">
+        </div>
+        <div class="col-12 col-md-3 d-grid">
+          <button class="btn btn-accent" type="submit">Сохранить</button>
+        </div>
+      </form>
+      <div id="executor-offer-status" class="small-kbd mb-2"></div>
+      <div id="executor-offers-list" class="row g-2"></div>
+    </div>
+
+    <div class="panel p-3 search-block search-block-primary mb-4 d-none" id="favorites-panel">
+      <div class="h6 mb-3">Избранные захоронения</div>
+      <form id="favorite-search-form" class="row g-2 mb-2">
+        <div class="col-12 col-lg-9"><input class="form-control" name="fio" placeholder="Поиск захоронений по ФИО"></div>
+        <div class="col-12 col-lg-3 d-grid"><button class="btn btn-outline-light" type="submit">Найти</button></div>
+      </form>
+      <div id="favorite-search-status" class="small-kbd mb-2"></div>
+      <div id="favorite-search-results" class="row g-2 mb-3"></div>
+      <div class="h6 mb-2">Мои избранные</div>
+      <div id="favorites-list" class="row g-2"></div>
+    </div>
+
+    <div id="tab-orders" class="cabinet-tab">
+      <div class="d-flex flex-wrap gap-2 mb-3" id="orders-filter">
+        <button class="btn btn-sm btn-outline-light active" type="button" data-filter="all">Все</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-filter="active">Активные</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-filter="done">Завершенные</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-filter="archive">Архив</button>
+      </div>
+      <div id="orders-list" class="row g-3"></div>
+    </div>
+    <div id="tab-notifications" class="cabinet-tab d-none">
+      <div id="notifications-list" class="row g-2"></div>
+    </div>
+    <div id="tab-subscriptions" class="cabinet-tab d-none">
+      <div id="subscriptions-list" class="row g-2"></div>
+    </div>
+    <div id="tab-donations" class="cabinet-tab d-none">
+      <form id="donation-form" class="row g-2 mb-3">
+        <div class="col-12 col-md-3"><input class="form-control" name="amount" placeholder="Сумма" required></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="cemetery" placeholder="ID кладбища (опц.)"></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="burial" placeholder="ID захоронения (опц.)"></div>
+        <div class="col-12 col-md-3 d-grid"><button class="btn btn-accent" type="submit">Отправить донат</button></div>
+      </form>
+      <div id="donation-status" class="small-kbd mb-2"></div>
+      <div id="donations-list" class="row g-2"></div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const accessToken = () => window.ocAuth.ocGetAccessToken();
+    const authFetch = (url, opts={}) => window.ocAuth.ocAuthFetch(url, opts);
+
+    const ordersList = document.getElementById("orders-list");
+    const notificationsList = document.getElementById("notifications-list");
+    const subscriptionsList = document.getElementById("subscriptions-list");
+    const donationsList = document.getElementById("donations-list");
+    const serviceSelect = document.getElementById("service-type-select");
+    const orderCreateStatus = document.getElementById("order-create-status");
+    const executorSelect = document.getElementById("executor-select");
+    const executorPreview = document.getElementById("executor-preview");
+    const executorCards = document.getElementById("executor-cards");
+    const executorOffersPanel = document.getElementById("executor-offers-panel");
+    const executorServiceSelect = document.getElementById("executor-service-select");
+    const executorOffersList = document.getElementById("executor-offers-list");
+    const favoritesPanel = document.getElementById("favorites-panel");
+    const orderCreatePanel = document.getElementById("order-create-form").closest(".panel");
+    const tabsContainer = document.getElementById("cabinet-tabs");
+    const orderCreateForm = document.getElementById("order-create-form");
+    let profile = null;
+    let activeTab = "";
+    let ordersCache = [];
+    let ordersFilter = "all";
+    const urlParams = new URLSearchParams(window.location.search);
+
+    function ensureAuth() {
+      if (!accessToken()) {
+        window.location.href = "{% url 'login-page' %}";
+        return false;
+      }
+      return true;
+    }
+    if (!ensureAuth()) {}
+
+    async function loadProfile() {
+      const r = await authFetch("/api/auth/me/");
+      if (!r.ok) return null;
+      profile = await r.json();
+      document.querySelector("#profile-form [name='username']").value = profile.username || "";
+      document.querySelector("#profile-form [name='email']").value = profile.email || "";
+      document.querySelector("#profile-form [name='display_name']").value = profile.display_name || "";
+      document.querySelector("#profile-form [name='phone']").value = profile.phone || "";
+      document.querySelector("#profile-form [name='bio']").value = profile.bio || "";
+
+      const isExecutor = profile.role === "executor";
+      orderCreatePanel.classList.toggle("d-none", isExecutor);
+      favoritesPanel.classList.toggle("d-none", isExecutor);
+      executorOffersPanel.classList.toggle("d-none", !isExecutor);
+      if (isExecutor) {
+        tabsContainer.classList.add("d-none");
+        ["orders", "notifications", "subscriptions", "donations"].forEach((tab) => {
+          const btn = document.querySelector(`#cabinet-tabs [data-tab="${tab}"]`);
+          const panel = document.getElementById(`tab-${tab}`);
+          if (btn) btn.closest("li").classList.add("d-none");
+          if (panel) panel.classList.add("d-none");
+        });
+        document.getElementById("tab-orders").classList.remove("d-none");
+      } else {
+        tabsContainer.classList.remove("d-none");
+        document.querySelectorAll(".cabinet-tab").forEach((el) => el.classList.add("d-none"));
+        orderCreatePanel.classList.add("d-none");
+        favoritesPanel.classList.add("d-none");
+      }
+      return profile;
+    }
+
+    document.querySelectorAll("#cabinet-tabs button[data-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        activateCustomerTab(btn.dataset.tab);
+      });
+    });
+
+    function activateCustomerTab(tabName) {
+      document.querySelectorAll("#cabinet-tabs button").forEach((b) => b.classList.remove("active"));
+      const currentBtn = document.querySelector(`#cabinet-tabs button[data-tab="${tabName}"]`);
+      if (currentBtn) currentBtn.classList.add("active");
+      activeTab = tabName;
+      document.querySelectorAll(".cabinet-tab").forEach((el) => el.classList.add("d-none"));
+      const panel = document.getElementById(`tab-${activeTab}`);
+      if (panel) panel.classList.remove("d-none");
+      const showOrders = activeTab === "orders";
+      orderCreatePanel.classList.toggle("d-none", !showOrders);
+      favoritesPanel.classList.toggle("d-none", !showOrders);
+    }
+
+    async function loadServiceTypes() {
+      const r = await fetch("/api/marketplace/services/");
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      serviceSelect.innerHTML = (items || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+      executorServiceSelect.innerHTML = (items || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+      await loadExecutorOffersForService();
+    }
+
+    async function loadExecutorOffersForService() {
+      const serviceType = serviceSelect.value;
+      if (!serviceType) {
+        executorSelect.innerHTML = `<option value="">Исполнитель не выбран</option>`;
+        executorPreview.innerHTML = "";
+        executorCards.innerHTML = "";
+        return;
+      }
+      const r = await authFetch(`/api/marketplace/executor-offers/catalog/?service_type=${serviceType}`);
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      executorSelect.innerHTML = `<option value="">Исполнитель не выбран</option>` + (items || []).filter((i) => i.is_available).map((item) => {
+        const label = item.executor_display_name || item.executor_name;
+        return `<option value="${item.executor}">${label} · ${item.fixed_price} RUB</option>`;
+      }).join("");
+      renderExecutorPreview(items || []);
+    }
+
+    function renderExecutorPreview(offers) {
+      const selectedExecutorId = executorSelect.value;
+      const selectedOffer = (offers || []).find((o) => String(o.executor) === String(selectedExecutorId));
+      if (!selectedOffer) {
+        executorPreview.innerHTML = `<div class="small text-muted-soft">Выберите исполнителя, чтобы увидеть карточку и описание.</div>`;
+      } else {
+        const title = selectedOffer.executor_display_name || selectedOffer.executor_name;
+        executorPreview.innerHTML = `
+          <div class="panel p-3">
+            <div class="fw-semibold">${title}</div>
+            <div class="small text-muted-soft mt-1">${selectedOffer.executor_bio || "Исполнитель пока не добавил информацию о себе."}</div>
+            <div class="small-kbd mt-2">Фиксированная цена: ${selectedOffer.fixed_price} RUB</div>
+          </div>
+        `;
+      }
+      executorCards.innerHTML = (offers || []).map((item) => {
+        const title = item.executor_display_name || item.executor_name;
+        const availability = item.is_available
+          ? `<div class="small-kbd mt-2">Цена: ${item.fixed_price} RUB</div><button class="btn btn-sm btn-accent mt-2" data-pick-executor="${item.executor}" type="button">Выбрать</button>`
+          : `<div class="small text-muted-soft mt-2">Исполнитель еще не указал цену для этой услуги.</div>`;
+        return `<div class="col-12 col-lg-6"><div class="panel p-3 h-100"><div class="fw-semibold">${title}</div><div class="small text-muted-soft mt-1">${item.executor_bio || "Информация отсутствует."}</div>${availability}</div></div>`;
+      }).join("");
+      executorCards.querySelectorAll("[data-pick-executor]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          executorSelect.value = btn.dataset.pickExecutor;
+          renderExecutorPreview(offers);
+        });
+      });
+    }
+
+    async function loadOrders() {
+      const r = await authFetch("/api/marketplace/orders/");
+      if (r.status === 401) return window.location.href = "{% url 'login-page' %}";
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      ordersCache = items || [];
+      renderOrders();
+    }
+
+    function renderOrders() {
+      const items = (ordersCache || []).filter((o) => {
+        if (ordersFilter === "active") return ["created", "in_progress"].includes(o.status);
+        if (ordersFilter === "done") return ["done"].includes(o.status);
+        if (ordersFilter === "archive") return ["confirmed", "cancelled"].includes(o.status);
+        return true;
+      });
+      if (!items.length) {
+        ordersList.innerHTML = `<div class="col-12"><div class="panel p-3">Заказов пока нет.</div></div>`;
+        return;
+      }
+      ordersList.innerHTML = items.map((o) => `
+        <div class="col-12 col-lg-6">
+          <div class="panel p-3 h-100">
+            <div class="d-flex justify-content-between mb-2">
+              <div class="fw-semibold">${profile?.role === "customer" ? `Заказ #${o.customer_order_number || o.id}` : "Заказ"}</div>
+              <span class="small-kbd">${o.status_label || o.status}</span>
+            </div>
+            <div class="small mb-1">Услуга: ${o.service_type_name || "-"}</div>
+            <div class="small mb-1">Захоронение: ${o.burial_label || "-"}</div>
+            ${profile?.role === "executor" && !o.power_of_attorney && ["created", "in_progress"].includes(o.status) ? `<div class="small-kbd mb-1 text-warning">Нужна доверенность перед началом работ</div>` : ""}
+            <div class="small text-muted-soft mb-3">${o.description || ""}</div>
+            <a class="btn btn-sm btn-outline-light" href="/orders/${o.id}/">Открыть заказ</a>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    document.querySelectorAll("#orders-filter [data-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#orders-filter [data-filter]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        ordersFilter = btn.dataset.filter;
+        renderOrders();
+      });
+    });
+
+    async function loadNotifications() {
+      const r = await authFetch("/api/marketplace/notifications/");
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      notificationsList.innerHTML = (items || []).map((n) => `
+        <div class="col-12">
+          <div class="panel p-3 d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-semibold">${n.title}</div>
+              <div class="small text-muted-soft">${n.body || ""}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-light" data-mark-read="${n.id}">${n.is_read ? "Прочитано" : "Отметить"}</button>
+          </div>
+        </div>
+      `).join("") || `<div class="col-12"><div class="panel p-3">Уведомлений нет.</div></div>`;
+
+      notificationsList.querySelectorAll("[data-mark-read]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          await authFetch(`/api/marketplace/notifications/${btn.dataset.markRead}/mark_read/`, { method: "POST" });
+          loadNotifications();
+        });
+      });
+    }
+
+    async function loadSubscriptions() {
+      const [burialResp, careResp] = await Promise.all([
+        authFetch("/api/marketplace/burial-subscriptions/"),
+        authFetch("/api/marketplace/care-subscriptions/"),
+      ]);
+      const bData = await burialResp.json();
+      const cData = await careResp.json();
+      const burialItems = Array.isArray(bData.results) ? bData.results : bData;
+      const careItems = Array.isArray(cData.results) ? cData.results : cData;
+      const blocks = [];
+      blocks.push(`<div class="col-12"><div class="small-kbd mb-2">Подписки на захоронения: ${burialItems?.length || 0}</div></div>`);
+      (burialItems || []).forEach((s) => {
+        blocks.push(`<div class="col-12 col-md-6"><div class="panel p-3">ID ${s.burial}, кладбище: ${s.cemetery_name || "-"}, участок: ${s.burial_label || "-"}</div></div>`);
+      });
+      blocks.push(`<div class="col-12 mt-2"><div class="small-kbd mb-2">Подписки на уход: ${careItems?.length || 0}</div></div>`);
+      (careItems || []).forEach((s) => {
+        blocks.push(`<div class="col-12 col-md-6"><div class="panel p-3">Burial ${s.burial}, услуга ${s.service_type}, период ${s.period}</div></div>`);
+      });
+      subscriptionsList.innerHTML = blocks.join("") || `<div class="col-12"><div class="panel p-3">Подписок нет.</div></div>`;
+    }
+
+    async function loadDonations() {
+      const r = await authFetch("/api/marketplace/donations/");
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      donationsList.innerHTML = (items || []).map((d) => `
+        <div class="col-12 col-md-6"><div class="panel p-3">
+          Донат #${d.id}: ${d.amount} ${d.currency} · ${d.status}
+          <div class="small text-muted-soft">${d.status_label || d.status}</div>
+        </div></div>
+      `).join("") || `<div class="col-12"><div class="panel p-3">Донатов пока нет.</div></div>`;
+    }
+
+    document.getElementById("order-create-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      orderCreateStatus.textContent = "Создание заказа...";
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      if (!body.executor) delete body.executor;
+      const r = await authFetch("/api/marketplace/orders/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        orderCreateStatus.textContent = "Ошибка: " + JSON.stringify(data);
+        return;
+      }
+      orderCreateStatus.textContent = `Заказ #${data.id} создан`;
+      e.target.reset();
+      await loadOrders();
+    });
+
+    serviceSelect.addEventListener("change", loadExecutorOffersForService);
+    executorSelect.addEventListener("change", async () => {
+      const serviceType = serviceSelect.value;
+      if (!serviceType) return;
+      const r = await authFetch(`/api/marketplace/executor-offers/catalog/?service_type=${serviceType}`);
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      renderExecutorPreview(items || []);
+    });
+
+    document.getElementById("profile-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      const r = await authFetch("/api/auth/me/", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      document.getElementById("profile-status").textContent = r.ok ? "Профиль сохранен" : ("Ошибка: " + JSON.stringify(data));
+      if (r.ok) await loadProfile();
+    });
+
+    document.getElementById("password-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      const r = await authFetch("/api/auth/change-password/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      document.getElementById("password-status").textContent = r.ok ? "Пароль изменен" : ("Ошибка: " + JSON.stringify(data));
+      if (r.ok) e.target.reset();
+    });
+
+    async function loadFavorites() {
+      if (!profile || profile.role !== "customer") return;
+      const r = await authFetch("/api/marketplace/burial-subscriptions/");
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      const el = document.getElementById("favorites-list");
+      el.innerHTML = (items || []).map((f) => `
+        <div class="col-12 col-lg-6"><div class="panel p-3">
+          <div class="fw-semibold mb-1">${f.person_name || "Без подписи"}</div>
+          <div class="small text-muted-soft">ID ${f.burial}, кладбище: ${f.cemetery_name || "-"}, участок: ${f.burial_label || "-"}</div>
+          <div class="mt-2"><a class="btn btn-sm btn-accent" href="/cabinet/?new_burial=${f.burial}">Заказать услугу</a></div>
+        </div></div>
+      `).join("") || `<div class="col-12"><div class="panel p-3">Избранных захоронений нет.</div></div>`;
+    }
+
+    async function loadExecutorOwnOffers() {
+      if (!profile || profile.role !== "executor") return;
+      const r = await authFetch("/api/marketplace/executor-offers/");
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      executorOffersList.innerHTML = (items || []).map((o) => `
+        <div class="col-12 col-md-6">
+          <div class="panel p-3">
+            <div class="fw-semibold">${o.service_type_name || o.service_type}</div>
+            <div class="small-kbd mt-1">${o.fixed_price} RUB</div>
+          </div>
+        </div>
+      `).join("") || `<div class="col-12"><div class="panel p-3">Пока нет выбранных услуг.</div></div>`;
+    }
+
+    document.getElementById("executor-offer-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      body.is_active = true;
+      const r = await authFetch("/api/marketplace/executor-offers/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      let data = null;
+      try {
+        data = await r.json();
+      } catch (_) {}
+      if (r.ok) {
+        document.getElementById("executor-offer-status").textContent = "Услуга и цена сохранены.";
+      } else {
+        document.getElementById("executor-offer-status").textContent = "Ошибка: " + JSON.stringify(data || {});
+      }
+      await loadExecutorOwnOffers();
+    });
+
+    document.getElementById("favorite-search-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fio = (new FormData(e.target).get("fio") || "").toString().trim();
+      const statusEl = document.getElementById("favorite-search-status");
+      const listEl = document.getElementById("favorite-search-results");
+      if (!fio) {
+        statusEl.textContent = "Введите ФИО для поиска.";
+        return;
+      }
+      statusEl.textContent = "Поиск...";
+      const params = new URLSearchParams({ fio, limit: "20" });
+      const r = await fetch(`/api/burials/search/?${params.toString()}`);
+      const payload = await r.json();
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      if (!items.length) {
+        statusEl.textContent = "Ничего не найдено.";
+        listEl.innerHTML = "";
+        return;
+      }
+      statusEl.textContent = `Найдено: ${payload.total || items.length}`;
+      listEl.innerHTML = items.map((item) => `
+        <div class="col-12 col-lg-6">
+          <div class="panel p-3">
+            <div class="fw-semibold">${item.display_person || "Без подписи"}</div>
+            <div class="small text-muted-soft">${item.cemetery_name || "-"} · ${item.grave_number || "-"}</div>
+            <button class="btn btn-sm btn-outline-light mt-2" data-fav-burial="${item.id}">В избранное</button>
+          </div>
+        </div>
+      `).join("");
+      listEl.querySelectorAll("[data-fav-burial]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const resp = await authFetch("/api/marketplace/burial-subscriptions/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ burial: btn.dataset.favBurial }),
+          });
+          if (resp.ok) {
+            statusEl.textContent = "Добавлено в избранное.";
+            await loadFavorites();
+          } else {
+            const err = await resp.json();
+            statusEl.textContent = "Ошибка: " + JSON.stringify(err);
+          }
+        });
+      });
+    });
+
+    document.getElementById("donation-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      const r = await authFetch("/api/marketplace/donations/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      document.getElementById("donation-status").textContent = r.ok ? `Донат #${data.id} создан` : ("Ошибка: " + JSON.stringify(data));
+      if (r.ok) {
+        e.target.reset();
+        await loadDonations();
+      }
+    });
+
+    (async function initCabinet() {
+      if (!ensureAuth()) return;
+      await loadProfile();
+      await Promise.all([loadServiceTypes(), loadOrders(), loadNotifications(), loadSubscriptions(), loadDonations(), loadFavorites(), loadExecutorOwnOffers()]);
+      if (profile?.role === "customer") {
+        const presetBurial = urlParams.get("new_burial");
+        if (presetBurial) {
+          activateCustomerTab("orders");
+          orderCreateForm.elements.burial.value = presetBurial;
+          orderCreateForm.elements.description.focus();
+        } else {
+          const requestedTab = urlParams.get("tab");
+          if (requestedTab && ["orders", "notifications", "subscriptions", "donations"].includes(requestedTab)) {
+            activateCustomerTab(requestedTab);
+          }
+        }
+      }
+    })();
+  </script>
+{% endblock %}

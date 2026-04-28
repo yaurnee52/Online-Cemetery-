@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel p-4 p-md-5 form-section" style="max-width: 860px; background: rgba(22, 33, 64, 0.96);">
+    <h1 class="h4 fw-semibold mb-2 text-center">Создать аккаунт</h1>
+    <p class="text-muted-soft text-center mb-4">Регистрация заказчика или исполнителя</p>
+
+    <form id="register-form" class="row g-3">
+      <div class="col-12 col-md-6">
+        <label class="form-label text-muted-soft small">Username</label>
+        <input name="username" class="form-control" required>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label text-muted-soft small">Email</label>
+        <input name="email" type="email" class="form-control">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label text-muted-soft small">Пароль</label>
+        <input name="password" type="password" class="form-control" required>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label text-muted-soft small">Роль</label>
+        <select name="role" class="form-select">
+          <option value="customer">Заказчик</option>
+          <option value="executor">Исполнитель</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label text-muted-soft small">Имя для отображения</label>
+        <input name="display_name" class="form-control">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label text-muted-soft small">Телефон</label>
+        <input name="phone" class="form-control">
+      </div>
+      <div class="col-12 d-flex gap-2 justify-content-center mt-2">
+        <button class="btn btn-accent px-4" type="submit">Зарегистрироваться</button>
+      </div>
+      <div class="col-12 text-center">
+        <a href="{% url 'login-page' %}" class="btn btn-link text-decoration-none">Уже есть аккаунт? Войти</a>
+      </div>
+      <div class="col-12">
+        <div id="register-status" class="small-kbd text-center"></div>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const form = document.getElementById("register-form");
+    const statusEl = document.getElementById("register-status");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      statusEl.textContent = "Создание аккаунта...";
+      const body = Object.fromEntries(new FormData(form).entries());
+      try {
+        const r = await fetch("/api/auth/register/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          statusEl.textContent = "Ошибка регистрации: " + JSON.stringify(data);
+          return;
+        }
+        statusEl.textContent = "Аккаунт создан. Выполняем вход...";
+        const loginResp = await fetch("/api/auth/login/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: body.username, password: body.password })
+        });
+        const loginData = await loginResp.json();
+        if (loginResp.ok) {
+          window.ocAuth.ocSetTokens(loginData.access, loginData.refresh);
+          window.ocAuth.syncAuthNav();
+          window.location.href = "{% url 'cabinet-page' %}";
+          return;
+        }
+        statusEl.textContent = "Зарегистрировано. Войдите вручную.";
+      } catch (err) {
+        statusEl.textContent = "Сеть недоступна";
+      }
+    });
+  </script>
+{% endblock %}

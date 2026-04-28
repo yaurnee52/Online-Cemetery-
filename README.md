@@ -1,114 +1,155 @@
 # Онлайн-кладбище (Django + DRF)
 
-Информационная система поиска кладбищ и мест захоронений Москвы.
-Работает на Django 5 + Django REST Framework, единая база PostgreSQL.
+Веб-платформа для поиска захоронений, работы с картой кладбищ Москвы и заказа услуг по уходу.
 
-## Стек
+## Технологии
 
-- **Backend**: Django 5, Django REST Framework, django-filter
-- **Database**: PostgreSQL (одна база на всё)
-- **Frontend**: Django templates + Bootstrap 5 + 2GIS Maps
-- **Конфиг**: `.env` через `python-dotenv`
+- Backend: Django 5, Django REST Framework, django-filter
+- Database: PostgreSQL
+- Frontend: Django templates + Bootstrap 5 + TomSelect + 2GIS
+- Auth: JWT (`/api/auth/login/`, `/api/auth/refresh/`)
+- Async: Celery + Redis + django-celery-beat
 
-## Структура
+## Приложения проекта
 
-```
-OnlineCemetery/
-├── config/                       # Django-проект
-│   ├── settings.py               # настройки (БД, DRF, шаблоны)
-│   ├── urls.py                   # корневой роутер
-│   ├── wsgi.py / asgi.py
-├── apps/
-│   └── cemeteries/               # бизнес-приложение
-│       ├── models.py             # Cemetery / Burial / BurialPerson
-│       ├── serializers.py        # DRF сериалайзеры
-│       ├── filters.py            # django-filter FilterSet'ы
-│       ├── services.py           # бизнес-логика (поиск, парсинг, geocoding)
-│       ├── views.py              # ViewSets + APIView + TemplateView
-│       ├── urls.py               # API + страницы
-│       ├── admin.py              # Django Admin
-│       ├── management/commands/
-│       │   └── migrate_old_data.py   # миграция legacy данных
-│       └── migrations/
-├── templates/                    # index.html / map.html / cemetery.html
-├── static/                       # статика
-├── manage.py
-├── requirements.txt
-└── .env
+- `apps/cemeteries` — кладбища, захоронения, поиск, карта
+- `apps/users` — регистрация, профиль, роли (`customer`/`executor`)
+- `apps/marketplace` — заказы, чат, уведомления, подписки, донаты, доверенности
+
+---
+
+## Быстрый старт (Windows)
+
+### Запуск в 1 клик (рекомендуется)
+
+Самый простой вариант:
+
+```powershell
+.\run-dev.bat
 ```
 
-## Установка
+или
 
-```bash
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-dev.ps1
+```
+
+Скрипт сам:
+
+- создаст `.venv` (если нет),
+- установит зависимости,
+- создаст `.env` из `.env.example` (если нет),
+- применит миграции,
+- запустит сервер.
+
+### 1) Создать и активировать виртуальное окружение
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # Linux / macOS
+.\.venv\Scripts\Activate.ps1
+```
 
+### 2) Установить зависимости
+
+```powershell
 pip install -r requirements.txt
 ```
 
-Заполни `.env` (см. шаблон в репозитории) — главное `POSTGRES_*` переменные.
+### 3) Настроить `.env`
 
-## База данных
+Минимально нужны:
 
-```bash
-python manage.py migrate
-python manage.py createsuperuser   # для доступа в /admin/
+```env
+SECRET_KEY=change-me
+DEBUG=True
+ALLOWED_HOSTS=127.0.0.1,localhost
+
+POSTGRES_DB=online_cemetery
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+
+DGIS_API_KEY=
+DGIS_FALLBACK_KEY=
 ```
 
-## Перенос старых данных
+### 4) Применить миграции
 
-Если в той же PostgreSQL ещё лежат legacy таблицы `cemeteries`, `burials`,
-`burial_persons` (от старого FastAPI), их можно перелить в новые
-Django-таблицы (`cemeteries_cemetery`, `cemeteries_burial`, `cemeteries_burialperson`):
+```powershell
+python manage.py migrate
+```
 
-```bash
-# полная миграция (все три фазы)
+### 5) Создать администратора
+
+```powershell
+python manage.py createsuperuser
+```
+
+### 6) Запустить проект
+
+```powershell
+python manage.py runserver
+```
+
+Открыть:
+
+- Главная: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+- Карта: [http://127.0.0.1:8000/map/](http://127.0.0.1:8000/map/)
+- Кабинет: [http://127.0.0.1:8000/cabinet/](http://127.0.0.1:8000/cabinet/)
+- Админка: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
+
+---
+
+## Полезные команды
+
+### Миграция legacy-данных
+
+```powershell
 python manage.py migrate_old_data
-
-# только кладбища, источник — legacy SQLite
-python manage.py migrate_old_data --only cemeteries --sqlite-path cemetery.db
-
-# с очисткой целевых таблиц
-python manage.py migrate_old_data --truncate
-
-# проверка без записи
 python manage.py migrate_old_data --dry-run
+python manage.py migrate_old_data --truncate
+```
+
+### Импорт координат кладбищ из Excel
+
+```powershell
+python manage.py import_cemetery_coords --xlsx "data/moscow_cemeteries_full.xlsx"
 ```
 
 Команда:
 
-- сопоставляет `burial.cemetery_name` с моделью `Cemetery` через нормализованное имя;
-- разбирает псевдо-JSON `geoData` / `geoDataCenter` в чистый GeoJSON-словарь;
-- конвертирует `has_tombstone` (`Да`/`Нет`) в `BooleanField`;
-- ничего не теряет: новые таблицы создаются, старые остаются нетронутыми.
+- обновляет координаты для кладбищ без координат;
+- умеет принудительно заменить координаты для проблемных названий (встроенный список алиасов).
 
-После успешной миграции legacy таблицы можно удалить вручную в `psql`.
+### Проверка проекта
 
-## Запуск
-
-```bash
-python manage.py runserver 0.0.0.0:8000
+```powershell
+python manage.py check
 ```
 
-- UI: <http://localhost:8000/>
-- Карта: <http://localhost:8000/map/>
-- Админка: <http://localhost:8000/admin/>
-- DRF Browsable API: <http://localhost:8000/api/cemeteries/>
+---
 
-## REST API
+## API (основное)
 
-| Метод | URL                                    | Описание                                |
-| ----- | -------------------------------------- | --------------------------------------- |
-| GET   | `/api/cemeteries/`                     | список кладбищ (`?search=`, `?ordering=`) |
-| GET   | `/api/cemeteries/{id}/`                | карточка кладбища                       |
-| GET   | `/api/cemeteries/{id}/burials/`        | захоронения внутри кладбища (фильтры `fio`, `sector`, `limit`) |
-| GET   | `/api/cemeteries/markers/`             | маркеры для карты                       |
-| POST  | `/api/cemeteries/geocode/`             | геокодинг кладбищ без координат         |
-| GET   | `/api/burials/`                        | захоронения                             |
-| GET   | `/api/burials/{id}/`                   | детальная карточка с людьми             |
-| GET   | `/api/burials/search/`                 | плоский поиск по людям (для UI таблицы) |
-| GET   | `/api/burials/{id}/point/`             | точка `lat/lon` захоронения             |
-| GET   | `/api/persons/`                        | люди (с фильтрами `fio`, `cemetery`, годы) |
-| GET   | `/api/2gis/search/`                    | прокси для 2GIS                         |
-| GET   | `/api/mosru/64023/`                    | проверка data.mos.ru                    |
+- `GET /api/cemeteries/` — список кладбищ
+- `GET /api/cemeteries/{id}/burials/` — захоронения кладбища (`limit`, `offset`, фильтры)
+- `GET /api/burials/search/` — общий поиск по людям (`limit`, `offset`, фильтры)
+- `POST /api/auth/register/` — регистрация
+- `POST /api/auth/login/` — вход (JWT)
+- `GET /api/auth/me/` — текущий профиль
+- `GET /api/marketplace/orders/` — заказы пользователя
+- `POST /api/marketplace/orders/{id}/take|done|confirm/` — действия по заказу
+
+---
+
+## Celery (опционально)
+
+Если используете фоновые задачи:
+
+```powershell
+celery -A config worker -l info
+celery -A config beat -l info
+```
+
+Для Celery нужен работающий Redis (`CELERY_BROKER_URL` в `.env`).

@@ -156,6 +156,11 @@
             </tbody>
           </table>
         </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <button id="cemetery-prev" class="btn btn-sm btn-outline-light" type="button">← Предыдущие</button>
+          <div id="cemetery-page" class="small-kbd">Страница 1</div>
+          <button id="cemetery-next" class="btn btn-sm btn-outline-light" type="button">Следующие →</button>
+        </div>
       </div>
     {% endif %}
   </div>
@@ -171,18 +176,52 @@
         .replaceAll('"', "&quot;");
     }
 
+    let currentRole = "";
+
+    async function detectRole() {
+      currentRole = "";
+      if (!window.ocAuth?.ocGetAccessToken?.()) return;
+      const profile = window.ocAuth.ocGetProfile?.() || {};
+      if (profile?.role) {
+        currentRole = profile.role;
+        return;
+      }
+      try {
+        const r = await window.ocAuth.ocAuthFetch("/api/auth/me/");
+        if (!r.ok) return;
+        const data = await r.json();
+        currentRole = data.role || "";
+      } catch (_) {}
+    }
+
+    async function addToFavorites(burialId) {
+      if (currentRole !== "customer") return;
+      const r = await window.ocAuth.ocAuthFetch("/api/marketplace/burial-subscriptions/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ burial: burialId }),
+      });
+      if (r.ok) {
+        alert("Захоронение добавлено в избранное.");
+      } else {
+        const data = await r.json();
+        alert("Ошибка: " + JSON.stringify(data));
+      }
+    }
+
     async function loadCemeteryBurials() {
       const tbody = document.getElementById("cemetery-burials-body");
       if (!tbody) return;
       const fio = document.getElementById("cemetery-fio")?.value?.trim() || "";
       const sector = document.getElementById("cemetery-sector")?.value?.trim() || "";
-      const params = new URLSearchParams({ limit: "400" });
+      const params = new URLSearchParams({ limit: String(pageLimit), offset: String(pageOffset) });
       if (fio) params.set("fio", fio);
       if (sector) params.set("sector", sector);
       try {
         const response = await fetch("/api/cemeteries/{{ cemetery_id }}/burials/?" + params.toString());
         const data = await response.json();
         const items = Array.isArray(data.items) ? data.items : [];
+        const total = Number(data.total || 0);
         if (items.length === 0) {
           tbody.innerHTML = `
             <tr>
@@ -207,12 +246,22 @@
               <td>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                   <a class="btn btn-sm btn-outline-light" href="/map/?burial_id=${item.id}">На карте</a>
+                  ${currentRole === "customer" ? `<a class="btn btn-sm btn-accent" href="/cabinet/?new_burial=${item.id}">Заказать услугу</a>` : ""}
+                  ${currentRole === "customer" ? `<button class="btn btn-sm btn-outline-light" data-add-favorite="${item.id}" type="button">В избранное</button>` : ""}
                   <span class="small-kbd">${status}</span>
                 </div>
               </td>
             </tr>
           `;
         }).join("");
+        tbody.querySelectorAll("[data-add-favorite]").forEach((btn) => {
+          btn.addEventListener("click", () => addToFavorites(btn.dataset.addFavorite));
+        });
+        const from = Math.min(total, pageOffset + 1);
+        const to = Math.min(total, pageOffset + items.length);
+        document.getElementById("cemetery-page").textContent = `Страница ${Math.floor(pageOffset / pageLimit) + 1} · ${from}-${to} из ${total}`;
+        document.getElementById("cemetery-prev").disabled = pageOffset <= 0;
+        document.getElementById("cemetery-next").disabled = pageOffset + pageLimit >= total;
       } catch (error) {
         tbody.innerHTML = `
           <tr>
@@ -224,9 +273,29 @@
       }
     }
 
-    document.addEventListener("DOMContentLoaded", loadCemeteryBurials);
+    let pageOffset = 0;
+    const pageLimit = 10;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await detectRole();
+      await loadCemeteryBurials();
+    });
+    window.addEventListener("oc-auth-changed", async () => {
+      await detectRole();
+      await loadCemeteryBurials();
+    });
     document.getElementById("cemetery-search-form")?.addEventListener("submit", (event) => {
       event.preventDefault();
+      pageOffset = 0;
+      loadCemeteryBurials();
+    });
+    document.getElementById("cemetery-prev")?.addEventListener("click", () => {
+      if (pageOffset <= 0) return;
+      pageOffset = Math.max(0, pageOffset - pageLimit);
+      loadCemeteryBurials();
+    });
+    document.getElementById("cemetery-next")?.addEventListener("click", () => {
+      pageOffset += pageLimit;
       loadCemeteryBurials();
     });
   </script>

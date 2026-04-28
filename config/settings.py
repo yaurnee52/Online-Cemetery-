@@ -45,7 +45,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "django_filters",
+    "rest_framework_simplejwt",
+    "django_celery_beat",
     "apps.cemeteries.apps.CemeteriesConfig",
+    "apps.users.apps.UsersConfig",
+    "apps.marketplace.apps.MarketplaceConfig",
 ]
 
 
@@ -106,10 +110,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Валидация паролей (стандарт Django)
 # ---------------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # Отключено по требованию: без сложных фильтров пароля.
 ]
 
 
@@ -149,7 +150,21 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
 }
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": __import__("datetime").timedelta(hours=8),
+    "REFRESH_TOKEN_LIFETIME": __import__("datetime").timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_TIMEZONE = TIME_ZONE
 
 
 # ---------------------------------------------------------------------------
