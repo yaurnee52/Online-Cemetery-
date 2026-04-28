@@ -51,6 +51,7 @@ class CemeteryViewSet(viewsets.ReadOnlyModelViewSet):
         search_mode = request.query_params.get("search_mode")
         sector = request.query_params.get("sector")
         limit = int(request.query_params.get("limit") or 200)
+        offset = int(request.query_params.get("offset") or 0)
 
         items = services.search_person_hits(
             fio=fio,
@@ -64,6 +65,7 @@ class CemeteryViewSet(viewsets.ReadOnlyModelViewSet):
             death_year_from=_to_int(request.query_params.get("death_from")),
             death_year_to=_to_int(request.query_params.get("death_to")),
             limit=limit,
+            offset=offset,
             max_limit=2000,
         )
         total = services.count_person_hits(
@@ -78,7 +80,7 @@ class CemeteryViewSet(viewsets.ReadOnlyModelViewSet):
             death_year_from=_to_int(request.query_params.get("death_from")),
             death_year_to=_to_int(request.query_params.get("death_to")),
         )
-        return Response({"items": items, "total": total})
+        return Response({"items": items, "total": total, "limit": limit, "offset": offset})
 
     @action(detail=False, methods=["get"], url_path="markers")
     def markers(self, request):
@@ -121,6 +123,8 @@ class BurialViewSet(viewsets.ReadOnlyModelViewSet):
         except (TypeError, ValueError):
             cemetery_id_int = None
 
+        limit = int(params.get("limit") or 10)
+        offset = int(params.get("offset") or 0)
         items = services.search_person_hits(
             fio=params.get("fio"),
             search_mode=params.get("search_mode"),
@@ -133,10 +137,24 @@ class BurialViewSet(viewsets.ReadOnlyModelViewSet):
             death_year_exact=_to_int(params.get("death_exact")),
             death_year_from=_to_int(params.get("death_from")),
             death_year_to=_to_int(params.get("death_to")),
-            limit=int(params.get("limit") or 100),
+            limit=limit,
+            offset=offset,
             max_limit=500,
         )
-        return Response(items)
+        total = services.count_person_hits(
+            cemetery_id=cemetery_id_int,
+            cemetery_name=params.get("cemetery"),
+            fio=params.get("fio"),
+            search_mode=params.get("search_mode"),
+            sector=params.get("sector"),
+            birth_year_exact=_to_int(params.get("birth_exact")),
+            birth_year_from=_to_int(params.get("birth_from")),
+            birth_year_to=_to_int(params.get("birth_to")),
+            death_year_exact=_to_int(params.get("death_exact")),
+            death_year_from=_to_int(params.get("death_from")),
+            death_year_to=_to_int(params.get("death_to")),
+        )
+        return Response({"items": items, "total": total, "limit": limit, "offset": offset})
 
     @action(detail=True, methods=["get"], url_path="point")
     def point(self, request, pk=None):
@@ -210,7 +228,11 @@ class MapView(TemplateView):
         ]
 
         focus_point = None
+        focus_cemetery_id = None
         burial_id = self.request.GET.get("burial_id")
+        cemetery_id = self.request.GET.get("cemetery_id")
+        if cemetery_id and str(cemetery_id).isdigit():
+            focus_cemetery_id = int(cemetery_id)
         if burial_id and str(burial_id).isdigit():
             burial = Burial.objects.filter(id=int(burial_id)).first()
             if burial:
@@ -220,6 +242,7 @@ class MapView(TemplateView):
                         "lat": point[0],
                         "lon": point[1],
                         "label": services.normalize_inscription_preview(burial.inscription),
+                        "burial_id": burial.id,
                     }
 
         ctx.update(
@@ -228,6 +251,7 @@ class MapView(TemplateView):
                 "dgis_api_key": settings.DGIS_API_KEY or settings.DGIS_FALLBACK_KEY,
                 "markers_json": json.dumps(markers, ensure_ascii=False),
                 "focus_point_json": json.dumps(focus_point, ensure_ascii=False),
+                "focus_cemetery_id_json": json.dumps(focus_cemetery_id, ensure_ascii=False),
             }
         )
         return ctx

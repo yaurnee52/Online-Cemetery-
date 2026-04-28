@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel p-4 p-md-5 form-section">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <h1 class="h4 fw-semibold mb-1" id="order-title">Заказ #{{ order_id }}</h1>
+        <div class="text-muted-soft small">Управление статусом, фото-отчет, отзыв и чат.</div>
+      </div>
+      <a class="btn btn-outline-light btn-sm" href="{% url 'cabinet-page' %}">← В кабинет</a>
+    </div>
+
+    <div id="order-card" class="panel p-4 mb-4"></div>
+
+    <div class="row g-4">
+      <div class="col-12">
+        <div class="panel p-3 d-none" id="executor-actions-panel">
+          <div class="h6 mb-3">Статусы и действия</div>
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-light" data-action="take">Взять заказ</button>
+            <button class="btn btn-sm btn-outline-light" data-action="done">Завершить</button>
+            <a class="btn btn-sm btn-outline-light" id="show-order-map" href="/map/">Показать на карте</a>
+          </div>
+          <div id="status-action-result" class="small-kbd"></div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="panel p-3 d-none" id="customer-actions-panel">
+          <div class="h6 mb-3">Действия заказчика</div>
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <button class="btn btn-sm btn-accent" data-action="confirm">Подтвердить</button>
+            <button class="btn btn-sm btn-outline-light" data-action="generate-poa">Создать доверенность</button>
+            <a class="btn btn-sm btn-outline-light" id="show-order-map-customer" href="/map/">Показать на карте</a>
+          </div>
+          <div id="customer-action-result" class="small-kbd"></div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="panel p-3 d-none" id="executor-photos-panel">
+          <div class="h6 mb-3">Фото до/после</div>
+          <form id="photo-form" class="row g-2">
+            <div class="col-12 col-md-4">
+              <select class="form-select" name="kind">
+                <option value="before">До</option>
+                <option value="after">После</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-5">
+              <input type="file" name="image" class="form-control" required>
+            </div>
+            <div class="col-12 col-md-3 d-grid">
+              <button class="btn btn-accent" type="submit">Загрузить</button>
+            </div>
+          </form>
+          <div id="photo-result" class="small-kbd mt-2"></div>
+          <div id="photos-list" class="small mt-3"></div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="panel p-3">
+          <div class="h6 mb-3">Отзыв заказчика</div>
+          <form id="review-form" class="row g-2">
+            <div class="col-12 col-md-3">
+              <input type="number" class="form-control" min="1" max="5" name="rating" placeholder="1-5" required>
+            </div>
+            <div class="col-12 col-md-9">
+              <input class="form-control" name="comment" placeholder="Комментарий">
+            </div>
+            <div class="col-12 d-grid">
+              <button class="btn btn-accent" type="submit">Сохранить отзыв</button>
+            </div>
+          </form>
+          <div id="review-result" class="small-kbd mt-2"></div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="panel p-3">
+          <div class="h6 mb-3">Чат по заказу</div>
+          <div id="chat-list" style="max-height: 260px; overflow:auto;" class="mb-3"></div>
+          <form id="chat-form" class="d-flex gap-2">
+            <input class="form-control" name="message" placeholder="Сообщение..." required>
+            <button class="btn btn-accent" type="submit">Отправить</button>
+          </form>
+          <div id="chat-result" class="small-kbd mt-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const orderId = {{ order_id }};
+    const authFetch = (url, opts={}) => window.ocAuth.ocAuthFetch(url, opts);
+    const orderCard = document.getElementById("order-card");
+    const orderTitle = document.getElementById("order-title");
+    const photosList = document.getElementById("photos-list");
+    const chatList = document.getElementById("chat-list");
+    const executorActionsPanel = document.getElementById("executor-actions-panel");
+    const showOrderMapLink = document.getElementById("show-order-map");
+    const showOrderMapLinkCustomer = document.getElementById("show-order-map-customer");
+    const customerActionsPanel = document.getElementById("customer-actions-panel");
+    const executorPhotosPanel = document.getElementById("executor-photos-panel");
+    const reviewForm = document.getElementById("review-form");
+    let currentUserProfile = null;
+
+    function requireAuth() {
+      if (!window.ocAuth.ocGetAccessToken()) {
+        window.location.href = "{% url 'login-page' %}";
+        return false;
+      }
+      return true;
+    }
+
+    async function loadOrder() {
+      const r = await authFetch(`/api/marketplace/orders/${orderId}/`);
+      const data = await r.json();
+      if (!r.ok) {
+        orderCard.innerHTML = `<div class="text-danger">Ошибка загрузки заказа: ${JSON.stringify(data)}</div>`;
+        return null;
+      }
+      orderCard.innerHTML = `
+        <div class="row g-3 align-items-start">
+          <div class="col-12 col-lg-3"><div class="small text-muted-soft mb-1">Статус</div><div class="fw-semibold">${data.status_label || data.status}</div></div>
+          <div class="col-12 col-lg-3"><div class="small text-muted-soft mb-1">Услуга</div><div class="fw-semibold">${data.service_type_name || "-"}</div></div>
+          <div class="col-12 col-lg-3"><div class="small text-muted-soft mb-1">Участок</div><div class="fw-semibold">${data.burial_label || "-"}</div></div>
+          <div class="col-12 col-lg-3"><div class="small text-muted-soft mb-1">Доверенность</div><div>${data.power_of_attorney ? `<a href="${data.power_of_attorney}" target="_blank">Скачать</a>` : "еще не сформирована"}</div></div>
+          <div class="col-12"><div class="small text-muted-soft mb-1">Комментарий</div><div>${data.description || "-"}</div></div>
+        </div>
+      `;
+      if (currentUserProfile?.role === "customer" && data.customer_order_number) {
+        orderTitle.textContent = `Заказ #${data.customer_order_number}`;
+      } else {
+        orderTitle.textContent = `Заказ #${data.id}`;
+      }
+      showOrderMapLink.href = `/map/?burial_id=${data.burial}`;
+      showOrderMapLinkCustomer.href = `/map/?burial_id=${data.burial}`;
+      photosList.innerHTML = (data.photos || []).map((p) => `
+        <div class="small">${p.kind}: <a href="${p.image}" target="_blank">файл</a></div>
+      `).join("") || `<div class="small text-muted-soft">Фото еще не загружены.</div>`;
+      return data;
+    }
+
+    async function loadProfile() {
+      const r = await authFetch("/api/auth/me/");
+      if (!r.ok) {
+        return null;
+      }
+      currentUserProfile = await r.json();
+      return currentUserProfile;
+    }
+
+    function applyRoleVisibility(orderData) {
+      const role = currentUserProfile?.role;
+      const isExecutor = role === "executor";
+      const isCustomer = role === "customer";
+
+      executorActionsPanel.classList.toggle("d-none", !isExecutor);
+      executorPhotosPanel.classList.toggle("d-none", !isExecutor);
+      customerActionsPanel.classList.toggle("d-none", !isCustomer);
+      reviewForm.closest(".panel").classList.toggle("d-none", !isCustomer);
+
+      document.querySelectorAll("[data-action]").forEach((btn) => {
+        btn.classList.remove("d-none");
+      });
+
+      if (isExecutor) {
+        const takeBtn = document.querySelector('[data-action="take"]');
+        const doneBtn = document.querySelector('[data-action="done"]');
+        if (orderData.status !== "created") {
+          takeBtn.classList.add("d-none");
+        }
+        if (orderData.status !== "in_progress") {
+          doneBtn.classList.add("d-none");
+        }
+      }
+
+      if (isCustomer) {
+        const confirmBtnLocal = document.querySelector('[data-action="confirm"]');
+        const poaBtnLocal = document.querySelector('[data-action="generate-poa"]');
+        if (orderData.status !== "done") {
+          confirmBtnLocal.classList.add("d-none");
+        }
+        if (!orderData.executor) {
+          poaBtnLocal.classList.add("d-none");
+        }
+      }
+    }
+
+    async function loadChat() {
+      const r = await authFetch(`/api/marketplace/chat/?order_id=${orderId}`);
+      const data = await r.json();
+      const items = Array.isArray(data.results) ? data.results : data;
+      chatList.innerHTML = (items || []).map((m) => `
+        <div class="panel p-2 mb-2">
+          <div class="small-kbd">${m.sender_name} · ${new Date(m.created_at).toLocaleString()}</div>
+          <div>${m.message}</div>
+        </div>
+      `).join("") || `<div class="small text-muted-soft">Сообщений нет.</div>`;
+      chatList.scrollTop = chatList.scrollHeight;
+    }
+
+    document.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.dataset.action;
+        const map = { take: "take", done: "done", confirm: "confirm", "generate-poa": "generate_power_of_attorney" };
+        const endpoint = map[action];
+        if (!endpoint) return;
+        const r = await authFetch(`/api/marketplace/orders/${orderId}/${endpoint}/`, { method: "POST" });
+        const data = await r.json();
+        const resultEl = (action === "generate-poa" || action === "confirm")
+          ? document.getElementById("customer-action-result")
+          : document.getElementById("status-action-result");
+        resultEl.textContent = r.ok ? `OK: ${data.status || "выполнено"}` : ("Ошибка: " + JSON.stringify(data));
+        const refreshed = await loadOrder();
+        if (refreshed) applyRoleVisibility(refreshed);
+      });
+    });
+
+    document.getElementById("photo-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const r = await authFetch(`/api/marketplace/orders/${orderId}/add_photo/`, { method: "POST", body: fd });
+      const data = await r.json();
+      document.getElementById("photo-result").textContent = r.ok ? "Фото загружено" : ("Ошибка: " + JSON.stringify(data));
+      if (r.ok) { e.target.reset(); await loadOrder(); }
+    });
+
+    document.getElementById("review-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      const r = await authFetch(`/api/marketplace/orders/${orderId}/review/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      document.getElementById("review-result").textContent = r.ok ? "Отзыв сохранен" : ("Ошибка: " + JSON.stringify(data));
+    });
+
+    document.getElementById("chat-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target).entries());
+      body.order = orderId;
+      const r = await authFetch(`/api/marketplace/chat/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      document.getElementById("chat-result").textContent = r.ok ? "Отправлено" : ("Ошибка: " + JSON.stringify(data));
+      if (r.ok) {
+        e.target.reset();
+        await loadChat();
+      }
+    });
+
+    (async function init() {
+      if (!requireAuth()) return;
+      await loadProfile();
+      const orderData = await loadOrder();
+      if (orderData) applyRoleVisibility(orderData);
+      await loadChat();
+    })();
+  </script>
+{% endblock %}

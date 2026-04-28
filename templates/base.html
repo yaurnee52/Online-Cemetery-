@@ -57,6 +57,7 @@
         background: var(--body-bg) !important;
         color: var(--body-color);
         min-height: 100vh;
+        font-size: 1.05rem;
         transition: background-color 0.3s ease, color 0.3s ease;
       }
 
@@ -124,8 +125,17 @@
       }
 
       .hero-copy{
-        font-size: 1.18rem;
+        font-size: 1.3rem;
         line-height: 1.75;
+      }
+      .nav-link{
+        font-size: 1.1rem;
+      }
+      .auth-modal-panel{
+        background: rgba(22, 33, 64, 0.96) !important;
+      }
+      html[data-theme="light"] .auth-modal-panel{
+        background: rgba(255, 255, 255, 0.98) !important;
       }
 
       .hero-section{
@@ -500,6 +510,11 @@
           <ul class="navbar-nav ms-auto">
             <li class="nav-item"><a class="nav-link" href="{% url 'index' %}">Главная</a></li>
             <li class="nav-item"><a class="nav-link" href="{% url 'map' %}">Карта</a></li>
+            <li class="nav-item nav-services-link"><a class="nav-link" href="{% url 'marketplace-services-page' %}">Услуги</a></li>
+            <li class="nav-item auth-guest-link"><a class="nav-link" href="{% url 'register-page' %}" data-auth-modal="register">Регистрация</a></li>
+            <li class="nav-item auth-guest-link"><a class="nav-link" href="{% url 'login-page' %}" data-auth-modal="login">Вход</a></li>
+            <li class="nav-item auth-user-link d-none"><a class="nav-link" href="{% url 'cabinet-page' %}">Кабинет</a></li>
+            <li class="nav-item auth-user-link d-none"><a class="nav-link" href="#" id="logout-link">Выход</a></li>
           </ul>
           <button class="theme-toggle" id="theme-toggle" title="Переключить тему (Dark/Light)">
             <span id="theme-icon">🌙</span>
@@ -511,6 +526,46 @@
     <main class="container-fluid py-4 py-md-5 px-3 px-md-4">
       {% block content %}{% endblock %}
     </main>
+
+    <div class="modal fade" id="authModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content panel border-0 auth-modal-panel">
+          <div class="modal-header border-0">
+            <h5 class="modal-title" id="authModalTitle">Вход</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="modal-login-form" class="row g-2">
+              <div class="col-12"><input class="form-control" name="username" placeholder="Username" required></div>
+              <div class="col-12"><input class="form-control" type="password" name="password" placeholder="Пароль" required></div>
+              <div class="col-12 d-grid"><button class="btn btn-accent" type="submit">Войти</button></div>
+              <div class="col-12 text-center">
+                <button type="button" class="btn btn-link text-decoration-none" id="switch-to-register">Нет аккаунта? Зарегистрироваться</button>
+              </div>
+            </form>
+
+            <form id="modal-register-form" class="row g-2 d-none">
+              <div class="col-12"><input class="form-control" name="username" placeholder="Username" required></div>
+              <div class="col-12"><input class="form-control" name="email" type="email" placeholder="Email"></div>
+              <div class="col-12"><input class="form-control" type="password" name="password" placeholder="Пароль" required></div>
+              <div class="col-12">
+                <select name="role" class="form-select">
+                  <option value="customer">Заказчик</option>
+                  <option value="executor">Исполнитель</option>
+                </select>
+              </div>
+              <div class="col-12"><input class="form-control" name="display_name" placeholder="Имя"></div>
+              <div class="col-12"><input class="form-control" name="phone" placeholder="Телефон"></div>
+              <div class="col-12 d-grid"><button class="btn btn-accent" type="submit">Зарегистрироваться</button></div>
+              <div class="col-12 text-center">
+                <button type="button" class="btn btn-link text-decoration-none" id="switch-to-login">Уже есть аккаунт? Войти</button>
+              </div>
+            </form>
+            <div id="auth-modal-status" class="small-kbd mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
@@ -537,6 +592,157 @@
       function updateThemeIcon(theme) {
         themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
       }
+
+      // Lightweight auth state in UI (JWT in localStorage)
+      function ocGetAccessToken() {
+        return localStorage.getItem('oc_access_token') || "";
+      }
+      function ocSetTokens(access, refresh) {
+        if (access) localStorage.setItem('oc_access_token', access);
+        if (refresh) localStorage.setItem('oc_refresh_token', refresh);
+        window.dispatchEvent(new Event("oc-auth-changed"));
+      }
+      function ocClearTokens() {
+        localStorage.removeItem('oc_access_token');
+        localStorage.removeItem('oc_refresh_token');
+        localStorage.removeItem('oc_profile');
+        window.dispatchEvent(new Event("oc-auth-changed"));
+      }
+      function ocGetProfile() {
+        try {
+          return JSON.parse(localStorage.getItem("oc_profile") || "{}");
+        } catch (_) {
+          return {};
+        }
+      }
+      async function ocRefreshProfile() {
+        if (!ocGetAccessToken()) {
+          localStorage.removeItem("oc_profile");
+          return null;
+        }
+        try {
+          const r = await ocAuthFetch("/api/auth/me/");
+          if (!r.ok) return null;
+          const profile = await r.json();
+          localStorage.setItem("oc_profile", JSON.stringify(profile));
+          return profile;
+        } catch (_) {
+          return null;
+        }
+      }
+      async function ocAuthFetch(url, options = {}) {
+        const token = ocGetAccessToken();
+        const headers = Object.assign({}, options.headers || {});
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch(url, Object.assign({}, options, { headers }));
+      }
+      function syncAuthNav() {
+        const loggedIn = !!ocGetAccessToken();
+        const role = ocGetProfile().role;
+        document.querySelectorAll('.auth-guest-link').forEach((el) => {
+          el.classList.toggle('d-none', loggedIn);
+        });
+        document.querySelectorAll('.auth-user-link').forEach((el) => {
+          el.classList.toggle('d-none', !loggedIn);
+        });
+        document.querySelectorAll(".nav-services-link").forEach((el) => {
+          el.classList.toggle("d-none", loggedIn && role === "executor");
+        });
+      }
+      document.getElementById('logout-link')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        ocClearTokens();
+        syncAuthNav();
+        window.location.href = "{% url 'index' %}";
+      });
+      window.addEventListener("oc-auth-changed", async () => {
+        await ocRefreshProfile();
+        syncAuthNav();
+      });
+      ocRefreshProfile().finally(syncAuthNav);
+
+      const authModalEl = document.getElementById("authModal");
+      const authModal = authModalEl ? new bootstrap.Modal(authModalEl) : null;
+      const modalTitle = document.getElementById("authModalTitle");
+      const modalLoginForm = document.getElementById("modal-login-form");
+      const modalRegisterForm = document.getElementById("modal-register-form");
+      const modalStatus = document.getElementById("auth-modal-status");
+      const switchToRegister = document.getElementById("switch-to-register");
+      const switchToLogin = document.getElementById("switch-to-login");
+
+      function openAuthModal(type) {
+        if (!authModal) return;
+        const isLogin = type !== "register";
+        modalTitle.textContent = isLogin ? "Вход" : "Регистрация";
+        modalLoginForm.classList.toggle("d-none", !isLogin);
+        modalRegisterForm.classList.toggle("d-none", isLogin);
+        modalStatus.textContent = "";
+        authModal.show();
+      }
+
+      document.querySelectorAll("[data-auth-modal]").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          openAuthModal(link.dataset.authModal);
+        });
+      });
+      switchToRegister?.addEventListener("click", () => openAuthModal("register"));
+      switchToLogin?.addEventListener("click", () => openAuthModal("login"));
+
+      modalLoginForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        modalStatus.textContent = "Авторизация...";
+        const body = Object.fromEntries(new FormData(modalLoginForm).entries());
+        const r = await fetch("/api/auth/login/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          modalStatus.textContent = "Ошибка входа: " + JSON.stringify(data);
+          return;
+        }
+        ocSetTokens(data.access, data.refresh);
+        await ocRefreshProfile();
+        syncAuthNav();
+        authModal.hide();
+        if (window.location.pathname === "{% url 'index' %}" || window.location.pathname === "{% url 'map' %}") {
+          return;
+        }
+        window.location.href = "{% url 'cabinet-page' %}";
+      });
+
+      modalRegisterForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        modalStatus.textContent = "Регистрация...";
+        const body = Object.fromEntries(new FormData(modalRegisterForm).entries());
+        const r = await fetch("/api/auth/register/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          modalStatus.textContent = "Ошибка регистрации: " + JSON.stringify(data);
+          return;
+        }
+        const loginResp = await fetch("/api/auth/login/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: body.username, password: body.password }),
+        });
+        const loginData = await loginResp.json();
+        if (!loginResp.ok) {
+          modalStatus.textContent = "Аккаунт создан. Войдите вручную.";
+          return;
+        }
+        ocSetTokens(loginData.access, loginData.refresh);
+        await ocRefreshProfile();
+        syncAuthNav();
+        authModal.hide();
+      });
+      window.ocAuth = { ocGetAccessToken, ocSetTokens, ocClearTokens, ocAuthFetch, syncAuthNav, ocRefreshProfile, ocGetProfile };
     </script>
 
     {% block scripts %}{% endblock %}

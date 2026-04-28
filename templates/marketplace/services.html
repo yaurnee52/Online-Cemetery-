@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel p-4 p-md-5 form-section">
+    <h1 class="h4 fw-semibold mb-2">Маркетплейс услуг</h1>
+    <p class="text-muted-soft mb-4">Заказ работ по уходу за захоронениями: удобно и прозрачно.</p>
+    <div id="services-grid" class="row g-3"></div>
+    <div class="mt-4 d-flex gap-2">
+      <a href="{% url 'cabinet-page' %}" class="btn btn-accent">Перейти в кабинет</a>
+      <a href="{% url 'index' %}" class="btn btn-outline-light">На главную</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const grid = document.getElementById("services-grid");
+    const serviceDescriptions = {
+      cleaning: "Уборка участка, удаление мусора и базовая очистка территории захоронения.",
+      fence_painting: "Подготовка и покраска ограждения с аккуратной обработкой элементов.",
+      inspection: "Проверка состояния места захоронения с фотофиксацией и кратким отчетом.",
+      radonitsa_remote: "Удаленный уход к памятной дате: уборка, свеча и фотоотчет для семьи.",
+    };
+
+    async function loadServices() {
+      try {
+        const r = await fetch("/api/marketplace/services/");
+        const data = await r.json();
+        const items = Array.isArray(data.results) ? data.results : data;
+        if (!Array.isArray(items) || items.length === 0) {
+          grid.innerHTML = `<div class="col-12"><div class="panel p-3">Список услуг пуст.</div></div>`;
+          return;
+        }
+        grid.innerHTML = items.map((s) => `
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="panel p-3 h-100">
+              <div class="h6 mb-2">${s.name}</div>
+              <div class="small text-muted-soft mb-1">${(s.description || serviceDescriptions[s.code] || "Описание услуги будет добавлено.")}</div>
+            </div>
+          </div>
+        `).join("");
+      } catch (err) {
+        grid.innerHTML = `<div class="col-12"><div class="panel p-3">Не удалось загрузить услуги.</div></div>`;
+      }
+    }
+    loadServices();
+  </script>
+{% endblock %}

@@ -42,13 +42,48 @@
   <script>
     const cemeteryMarkers = {{ markers_json|safe }};
     const focusPoint = {{ focus_point_json|safe }};
+    const focusCemeteryId = {{ focus_cemetery_id_json|safe }};
+    let currentRole = "";
     
     let mapInstance = null;
     const markerById = new Map();
 
+    async function detectRole() {
+      currentRole = "";
+      if (!window.ocAuth?.ocGetAccessToken?.()) return;
+      const profile = window.ocAuth.ocGetProfile?.() || {};
+      if (profile?.role) {
+        currentRole = profile.role;
+        return;
+      }
+      try {
+        const r = await window.ocAuth.ocAuthFetch("/api/auth/me/");
+        if (!r.ok) return;
+        const data = await r.json();
+        currentRole = data.role || "";
+      } catch (_) {}
+    }
+
+    async function addToFavoritesFromMap(burialId) {
+      if (currentRole !== "customer") return;
+      const r = await window.ocAuth.ocAuthFetch("/api/marketplace/burial-subscriptions/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ burial: burialId }),
+      });
+      if (r.ok) {
+        alert("Добавлено в избранное.");
+      } else {
+        const data = await r.json();
+        alert("Ошибка: " + JSON.stringify(data));
+      }
+    }
+    window.addToFavoritesFromMap = addToFavoritesFromMap;
+
     if (typeof DG !== 'undefined') {
-      DG.then(function () {
+      DG.then(async function () {
         try {
+          await detectRole();
           mapInstance = DG.map('map', {
             center: [55.7558, 37.6173],
             zoom: 10
@@ -68,8 +103,22 @@
             mapInstance.setView([focusPoint.lat, focusPoint.lon], 16);
             const graveMarker = DG.marker([focusPoint.lat, focusPoint.lon]).addTo(mapInstance);
             const label = focusPoint.label || "Место захоронения";
-            graveMarker.bindPopup("<strong>" + label + "</strong><br>Точная точка могилы");
+            let actionsHtml = "";
+            if (currentRole === "customer" && focusPoint.burial_id) {
+              actionsHtml = "<div style='margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;'>" +
+                "<a class='btn btn-sm btn-outline-light' href='/cabinet/?new_burial=" + focusPoint.burial_id + "'>Заказать услугу</a>" +
+                "<button class='btn btn-sm btn-outline-light' onclick='window.addToFavoritesFromMap(" + focusPoint.burial_id + ")'>В избранное</button>" +
+                "</div>";
+            }
+            graveMarker.bindPopup("<strong>" + label + "</strong><br>Точная точка могилы" + actionsHtml);
             graveMarker.openPopup();
+          } else if (focusCemeteryId != null) {
+            const marker = markerById.get(String(focusCemeteryId));
+            if (marker) {
+              const latLng = marker.getLatLng();
+              mapInstance.setView([latLng.lat, latLng.lng], 14);
+              marker.openPopup();
+            }
           }
         } catch (mapErr) {
           console.error('Map initialization error:', mapErr);
@@ -117,6 +166,9 @@
         }
         window.location.href = "/cemetery/" + value + "/";
       });
+    });
+    window.addEventListener("oc-auth-changed", async () => {
+      await detectRole();
     });
   </script>
 {% endblock %}

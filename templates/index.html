@@ -30,7 +30,7 @@
         {% endfor %}
       </select>
       <div class="d-flex flex-wrap gap-2 mt-3 justify-content-center">
-        <a class="btn btn-accent px-4" href="{% url 'map' %}">🗺️ Открыть карту</a>
+        <button id="open-map-with-cemetery" class="btn btn-accent px-4" type="button">🗺️ Открыть карту</button>
         <button id="open-cemetery" class="btn btn-outline-light px-4" type="button">📋 Открыть карточку</button>
       </div>
 
@@ -165,6 +165,11 @@
           </tbody>
         </table>
       </div>
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <button id="results-prev" class="btn btn-sm btn-outline-light" type="button">← Предыдущие</button>
+        <div id="results-page" class="small-kbd">Страница 1</div>
+        <button id="results-next" class="btn btn-sm btn-outline-light" type="button">Следующие →</button>
+      </div>
     </div>
 
     <!-- Information Notes -->
@@ -214,6 +219,7 @@
 
     // Open Cemetery Button
     const openBtn = document.getElementById("open-cemetery");
+    const openMapBtn = document.getElementById("open-map-with-cemetery");
     openBtn.addEventListener("click", () => {
       const value = select.getValue();
       if (!value) {
@@ -221,6 +227,14 @@
         return;
       }
       window.location.href = "/cemetery/" + value + "/";
+    });
+    openMapBtn.addEventListener("click", () => {
+      const value = select.getValue();
+      if (!value) {
+        window.location.href = "/map/";
+        return;
+      }
+      window.location.href = "/map/?cemetery_id=" + value;
     });
 
     // Burial Search Form
@@ -230,9 +244,72 @@
     const resultsBlock = document.getElementById("search-results");
     const resultsBody = document.getElementById("results-body");
     const resultsCount = document.getElementById("results-count");
+    const resultsPrev = document.getElementById("results-prev");
+    const resultsNext = document.getElementById("results-next");
+    const resultsPage = document.getElementById("results-page");
+    let currentRole = "";
+    let latestItems = [];
+    let totalCount = 0;
+    let pageLimit = 10;
+    let pageOffset = 0;
 
-    detailForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    async function detectRole() {
+      currentRole = "";
+      if (!window.ocAuth?.ocGetAccessToken?.()) return;
+      try {
+        const profile = window.ocAuth.ocGetProfile?.() || {};
+        if (profile?.role) {
+          currentRole = profile.role;
+          return;
+        }
+        const r = await window.ocAuth.ocAuthFetch("/api/auth/me/");
+        if (!r.ok) return;
+        const data = await r.json();
+        currentRole = data.role || "";
+      } catch (_) {
+        currentRole = "";
+      }
+    }
+
+    function renderRows(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">По вашему запросу данные не найдены. Попробуйте изменить параметры поиска.</td></tr>`;
+        resultsCount.textContent = "Показаны записи: 0";
+        return;
+      }
+      resultsCount.textContent = `Показано: ${Math.min(totalCount, pageOffset + 1)}-${Math.min(totalCount, pageOffset + items.length)} из ${totalCount}`;
+      const rows = items.map((item) => {
+        const status = item.has_tombstone_bool === true ? "Памятник есть" : (item.has_tombstone_bool === false ? "Памятника нет" : "Не указано");
+        const personLabel = escapeHtml(item.display_person || item.inscription_preview || "Без подписи");
+        return `
+          <tr>
+            <td>${personLabel}</td>
+            <td>${escapeHtml(item.cemetery_name || "—")}</td>
+            <td>${escapeHtml(item.grave_number || "—")}</td>
+            <td>${escapeHtml(item.birth_date || "—")}</td>
+            <td>${escapeHtml(item.death_date || "—")}</td>
+            <td>
+              <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-sm btn-outline-light" href="/map/?burial_id=${item.id}">Показать могилу</a>
+                ${currentRole === "customer" ? `<a class="btn btn-sm btn-accent" href="/cabinet/?new_burial=${item.id}">Заказать услугу</a>` : ""}
+                ${currentRole === "customer" ? `<button class="btn btn-sm btn-outline-light" data-add-favorite="${item.id}" type="button">В избранное</button>` : ""}
+                <span class="small-kbd">${status}</span>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      resultsBody.innerHTML = rows;
+      resultsBody.querySelectorAll("[data-add-favorite]").forEach((btn) => {
+        btn.addEventListener("click", () => addToFavorites(btn.dataset.addFavorite));
+      });
+      const pageNum = Math.floor(pageOffset / pageLimit) + 1;
+      resultsPage.textContent = `Страница ${pageNum}`;
+      resultsPrev.disabled = pageOffset <= 0;
+      resultsNext.disabled = pageOffset + pageLimit >= totalCount;
+    }
+
+    async function loadSearchPage() {
       const formData = new FormData(detailForm);
       const params = new URLSearchParams();
       const fio = (formData.get("fio") || "").toString().trim();
@@ -256,7 +333,33 @@
       if (deathExact) params.set("death_exact", deathExact);
       if (deathFrom) params.set("death_from", deathFrom);
       if (deathTo) params.set("death_to", deathTo);
-      params.set("limit", "200");
+      params.set("limit", String(pageLimit));
+      params.set("offset", String(pageOffset));
+      const response = await fetch("/api/burials/search/?" + params.toString());
+      return response.json();
+    }
+
+    async function addToFavorites(burialId) {
+      if (!window.ocAuth?.ocGetAccessToken?.()) {
+        alert("Сначала выполните вход как заказчик.");
+        return;
+      }
+      const r = await window.ocAuth.ocAuthFetch("/api/marketplace/burial-subscriptions/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ burial: burialId }),
+      });
+      if (r.ok) {
+        alert("Захоронение добавлено в избранное.");
+        return;
+      }
+      const data = await r.json();
+      alert("Не удалось добавить в избранное: " + JSON.stringify(data));
+    }
+
+    detailForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      pageOffset = 0;
 
       notesBlock.classList.add("d-none");
       resultsBlock.classList.remove("d-none");
@@ -264,35 +367,10 @@
       resultsCount.textContent = "Показаны записи: ...";
 
       try {
-        const response = await fetch("/api/burials/search/?" + params.toString());
-        const items = await response.json();
-        if (!Array.isArray(items) || items.length === 0) {
-          resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">По вашему запросу данные не найдены. Попробуйте изменить параметры поиска.</td></tr>`;
-          resultsCount.textContent = "Показаны записи: 0";
-          return;
-        }
-
-        resultsCount.textContent = "Показаны записи: " + items.length;
-        const rows = items.map((item) => {
-          const status = item.has_tombstone_bool === true ? "Памятник есть" : (item.has_tombstone_bool === false ? "Памятника нет" : "Не указано");
-          const personLabel = escapeHtml(item.display_person || item.inscription_preview || "Без подписи");
-          return `
-            <tr>
-              <td>${personLabel}</td>
-              <td>${escapeHtml(item.cemetery_name || "—")}</td>
-              <td>${escapeHtml(item.grave_number || "—")}</td>
-              <td>${escapeHtml(item.birth_date || "—")}</td>
-              <td>${escapeHtml(item.death_date || "—")}</td>
-              <td>
-                <div class="d-flex flex-wrap gap-2">
-                  <a class="btn btn-sm btn-outline-light" href="/map/?burial_id=${item.id}">Показать могилу</a>
-                  <span class="small-kbd">${status}</span>
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join("");
-        resultsBody.innerHTML = rows;
+        const payload = await loadSearchPage();
+        latestItems = Array.isArray(payload.items) ? payload.items : [];
+        totalCount = Number(payload.total || 0);
+        renderRows(latestItems);
       } catch (error) {
         resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">Ошибка поиска. Проверьте подключение к базе.</td></tr>`;
         resultsCount.textContent = "Показаны записи: 0";
@@ -305,7 +383,33 @@
       resultsBlock.classList.add("d-none");
       resultsBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted-soft">По вашему запросу данные не найдены. Попробуйте изменить параметры поиска.</td></tr>`;
       resultsCount.textContent = "Показаны записи: 0";
+      resultsPage.textContent = "Страница 1";
     });
+
+    resultsPrev.addEventListener("click", async () => {
+      if (pageOffset <= 0) return;
+      pageOffset = Math.max(0, pageOffset - pageLimit);
+      const payload = await loadSearchPage();
+      latestItems = Array.isArray(payload.items) ? payload.items : [];
+      totalCount = Number(payload.total || 0);
+      renderRows(latestItems);
+    });
+    resultsNext.addEventListener("click", async () => {
+      if (pageOffset + pageLimit >= totalCount) return;
+      pageOffset += pageLimit;
+      const payload = await loadSearchPage();
+      latestItems = Array.isArray(payload.items) ? payload.items : [];
+      totalCount = Number(payload.total || 0);
+      renderRows(latestItems);
+    });
+
+    window.addEventListener("oc-auth-changed", async () => {
+      await detectRole();
+      if (resultsBlock && !resultsBlock.classList.contains("d-none")) {
+        renderRows(latestItems);
+      }
+    });
+    detectRole();
   </script>
 {% endblock %}
 
