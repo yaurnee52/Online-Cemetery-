@@ -704,9 +704,13 @@
           return;
         }
         ocSetTokens(data.access, data.refresh);
-        await ocRefreshProfile();
+        const profile = await ocRefreshProfile();
         syncAuthNav();
         authModal.hide();
+        if (profile?.is_staff) {
+          window.location.href = "/admin/";
+          return;
+        }
         if (window.location.pathname === "{% url 'index' %}" || window.location.pathname === "{% url 'map' %}") {
           return;
         }
