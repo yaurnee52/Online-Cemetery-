@@ -12,6 +12,12 @@ class ServiceCode(models.TextChoices):
     FENCE_PAINTING = "fence_painting", "Покраска ограждений"
     INSPECTION = "inspection", "Проверка состояния"
     RADONITSA_REMOTE = "radonitsa_remote", "Дистанционная Радоница"
+    PARENTS_SATURDAY = "parents_saturday", "Поминальные работы в родительскую субботу"
+    PASCHA_CARE = "pascha_care", "Поминальные работы к Пасхе"
+    MEMORIAL_WARRIORS = "memorial_warriors", "Поминовение усопших воинов"
+    TRINITY_CARE = "trinity_care", "Поминальные работы к Троице"
+    VICTORY_DAY_CARE = "victory_day_care", "Поминальные работы к 9 мая"
+    MEMORIAL_DAY_CARE = "memorial_day_care", "Поминальные работы ко Дню памяти"
 
 
 class ServiceType(models.Model):

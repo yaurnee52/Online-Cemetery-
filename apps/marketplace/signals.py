@@ -1,18 +1,16 @@
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 
-from .models import ServiceCode, ServiceType
+from .models import ServiceType
+from .service_catalog import SERVICE_CATALOG
 
 
 @receiver(post_migrate)
 def seed_service_types(sender, **kwargs):
     if getattr(sender, "label", None) != "marketplace":
         return
-    defaults = [
-        (ServiceCode.CLEANING, "Уборка участка"),
-        (ServiceCode.FENCE_PAINTING, "Покраска ограждений"),
-        (ServiceCode.INSPECTION, "Проверка состояния"),
-        (ServiceCode.RADONITSA_REMOTE, "Дистанционная Радоница"),
-    ]
-    for code, name in defaults:
-        ServiceType.objects.get_or_create(code=code, defaults={"name": name})
+    for code, name, description, is_active in SERVICE_CATALOG:
+        ServiceType.objects.update_or_create(
+            code=code,
+            defaults={"name": name, "description": description, "is_active": is_active},
+        )
