@@ -5,7 +5,7 @@
 ## Технологии
 
 - Backend: Django 5, Django REST Framework, django-filter
-- Database: PostgreSQL
+- Database: PostgreSQL (для продакшена); локально можно **SQLite** через `DJANGO_USE_SQLITE=true` в `.env`
 - Frontend: Django templates + Bootstrap 5 + TomSelect (файлы в `static/vendor/`, без CDN) + 2GIS для карты
 - Auth: JWT (`/api/auth/login/`, `/api/auth/refresh/`)
 - Async: Celery + Redis + django-celery-beat
@@ -38,9 +38,11 @@ powershell -ExecutionPolicy Bypass -File .\run-dev.ps1
 
 - создаст `.venv`, если ещё нет рабочего `python` внутри (пустую или битую папку `.venv` пересоздаст),
 - установит зависимости через `.\.venv\Scripts\python.exe` (без `Activate.ps1` — так надёжнее после клона и на машинах с политикой PowerShell),
-- создаст `.env` из `.env.example` (если нет),
+- создаст `.env` из `.env.example` (если нет) — в примере по умолчанию **SQLite**, Postgres не обязателен,
 - применит миграции,
 - запустит сервер.
+
+Файл `.env` должен быть в **UTF-8** (иначе возможны ошибки при подключении к БД на Windows).
 
 ### 1) Создать и активировать виртуальное окружение
 
@@ -57,12 +59,18 @@ pip install -r requirements.txt
 
 ### 3) Настроить `.env`
 
-Минимально нужны:
+Скопируйте `.env.example` в `.env` (или дождитесь `run-dev`).
+
+- **`DJANGO_USE_SQLITE=true`** (как в примере) — база в файле `db.sqlite3` в корне проекта, **PostgreSQL не нужен**. Удобно для клона и первого запуска.
+- **`DJANGO_USE_SQLITE=false`** — тогда нужен установленный PostgreSQL и корректные `POSTGRES_*`.
+
+Переменные `DJANGO_*` читает именно Django (секрет, отладка, хосты). Пример:
 
 ```env
-SECRET_KEY=change-me
-DEBUG=True
-ALLOWED_HOSTS=127.0.0.1,localhost
+DJANGO_USE_SQLITE=true
+DJANGO_SECRET_KEY=change-me-in-production
+DJANGO_DEBUG=true
+DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 
 POSTGRES_DB=online_cemetery
 POSTGRES_USER=postgres
