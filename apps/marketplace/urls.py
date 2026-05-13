@@ -9,6 +9,7 @@ from .views import (
     ChatMessageViewSet,
     DonationViewSet,
     ExecutorServiceOfferViewSet,
+    HolidayReminderAPIView,
     NotificationViewSet,
     OrderViewSet,
     ServiceTypeViewSet,
@@ -24,4 +25,7 @@ router.register("donations", DonationViewSet, basename="donation")
 router.register("care-subscriptions", CareSubscriptionViewSet, basename="care-subscription")
 router.register("executor-offers", ExecutorServiceOfferViewSet, basename="executor-offer")
 
-urlpatterns = [path("", include(router.urls))]
+urlpatterns = [
+    path("holiday-reminders/", HolidayReminderAPIView.as_view(), name="holiday-reminders"),
+    path("", include(router.urls)),
+]

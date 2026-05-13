@@ -8,9 +8,11 @@ from django.views.generic import TemplateView
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.users.models import UserRole
 
+from .holidays import get_active_holiday_reminders
 from .models import (
     BurialSubscription,
     CareSubscription,
@@ -182,6 +184,35 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
         serializer.save(sender=user)
 
 
+class HolidayReminderAPIView(APIView):
+    """Публичный список напоминаний об услугах к ближайшим праздникам (для баннера на сайте)."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        days_before = request.query_params.get("days_before", "15")
+        try:
+            days_before_int = max(1, min(60, int(days_before)))
+        except (TypeError, ValueError):
+            days_before_int = 15
+        items = [
+            {
+                "key": r.key,
+                "title": r.title,
+                "body": r.body,
+                "holiday_date": r.holiday_date.isoformat(),
+                "holiday_date_display": r.holiday_date_display,
+                "date_context": r.date_context,
+                "days_until": r.days_until,
+                "service_codes": list(r.service_codes),
+                "primary_service_code": r.primary_service_code,
+                "marketplace_url": r.marketplace_url,
+            }
+            for r in get_active_holiday_reminders(days_before=days_before_int)
+        ]
+        return Response({"items": items})
+
+
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
@@ -203,7 +234,12 @@ class BurialSubscriptionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return BurialSubscription.objects.filter(user=self.request.user).order_by("-created_at")
+        return (
+            BurialSubscription.objects.filter(user=self.request.user)
+            .select_related("burial", "burial__cemetery")
+            .prefetch_related("burial__people")
+            .order_by("-created_at")
+        )
 
     def perform_create(self, serializer):
         if self.request.user.profile.role != UserRole.CUSTOMER:

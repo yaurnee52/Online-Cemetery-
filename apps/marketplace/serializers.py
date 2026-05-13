@@ -18,9 +18,16 @@ from .models import (
 
 
 class ServiceTypeSerializer(serializers.ModelSerializer):
+    holiday_timing = serializers.SerializerMethodField()
+
+    def get_holiday_timing(self, obj):
+        from .holidays import get_next_holiday_for_service
+
+        return get_next_holiday_for_service(obj.code)
+
     class Meta:
         model = ServiceType
-        fields = "__all__"
+        fields = ("id", "code", "name", "description", "base_price", "is_active", "holiday_timing")
 
 
 class OrderPhotoSerializer(serializers.ModelSerializer):
@@ -112,6 +119,9 @@ class BurialSubscriptionSerializer(serializers.ModelSerializer):
     burial_label = serializers.CharField(source="burial.grave_number", read_only=True)
     cemetery_name = serializers.CharField(source="burial.cemetery.name", read_only=True)
     person_name = serializers.SerializerMethodField()
+    death_date = serializers.SerializerMethodField()
+    memorial_info = serializers.SerializerMethodField()
+    memorial_reminder = serializers.SerializerMethodField()
 
     def get_person_name(self, obj):
         person = obj.burial.people.order_by("id").first()
@@ -121,9 +131,42 @@ class BurialSubscriptionSerializer(serializers.ModelSerializer):
             return obj.burial.inscription
         return "Без подписи"
 
+    def get_death_date(self, obj):
+        person = obj.burial.people.order_by("id").first()
+        if not person:
+            return ""
+        return person.death_date or (str(person.death_year) if person.death_year else "")
+
+    def _first_person(self, obj):
+        return obj.burial.people.order_by("id").first()
+
+    def get_memorial_info(self, obj):
+        from .memorial_dates import memorial_info_for_person
+
+        person = self._first_person(obj)
+        if not person:
+            return None
+        return memorial_info_for_person(person.death_date, person.death_year)
+
+    def get_memorial_reminder(self, obj):
+        info = self.get_memorial_info(obj)
+        if info and info.get("is_reminder_active"):
+            return info
+        return None
+
     class Meta:
         model = BurialSubscription
-        fields = ("id", "burial", "burial_label", "cemetery_name", "person_name", "created_at")
+        fields = (
+            "id",
+            "burial",
+            "burial_label",
+            "cemetery_name",
+            "person_name",
+            "death_date",
+            "memorial_info",
+            "memorial_reminder",
+            "created_at",
+        )
         read_only_fields = ("created_at",)
 
 
