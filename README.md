@@ -6,7 +6,7 @@
 
 - Backend: Django 5, Django REST Framework, django-filter
 - Database: PostgreSQL
-- Frontend: Django templates + Bootstrap 5 + TomSelect + 2GIS
+- Frontend: Django templates + Bootstrap 5 + TomSelect (файлы в `static/vendor/`, без CDN) + 2GIS для карты
 - Auth: JWT (`/api/auth/login/`, `/api/auth/refresh/`)
 - Async: Celery + Redis + django-celery-beat
 
