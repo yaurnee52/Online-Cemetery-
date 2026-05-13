@@ -5,8 +5,6 @@ from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
-from docx import Document
-
 from .models import (
     CareSubscription,
     Notification,
@@ -39,17 +37,26 @@ def transition_order(order: Order, *, target_status: str, actor_id: int | None =
 
 
 def generate_power_of_attorney(order: Order) -> PowerOfAttorneyDocument:
-    doc = Document()
-    doc.add_heading("Доверенность на уход за захоронением", level=1)
-    doc.add_paragraph(f"Дата: {timezone.localdate().isoformat()}")
-    doc.add_paragraph(f"Заказ № {order.id}")
-    doc.add_paragraph(f"Заказчик: {order.customer.username}")
-    doc.add_paragraph(f"Исполнитель: {order.executor.username if order.executor else 'не назначен'}")
-    doc.add_paragraph(f"Кладбище: {order.burial.cemetery.name}")
-    doc.add_paragraph(f"Участок: {order.burial.grave_number or 'не указан'}")
-    doc.add_paragraph(
-        "Настоящим Заказчик поручает Исполнителю выполнение работ по уходу "
-        "за указанным захоронением в рамках оформленного заказа."
+    if not order.executor_id:
+        raise ValueError("Назначьте исполнителя перед формированием доверенности.")
+
+    trustor = order.customer.profile
+    attorney = order.executor.profile
+    if not trustor.has_identity_for_poa():
+        raise ValueError("У заказчика не заполнены ФИО и паспорт в профиле.")
+    if not attorney.has_identity_for_poa():
+        raise ValueError("У исполнителя не заполнены ФИО и паспорт в профиле.")
+
+    from .poa_document import build_power_of_attorney_docx
+
+    burial = order.burial
+    if burial.cemetery_id is None:
+        burial = type(burial).objects.select_related("cemetery").get(pk=burial.pk)
+
+    doc = build_power_of_attorney_docx(
+        trustor=trustor,
+        attorney=attorney,
+        burial=burial,
     )
 
     rel_dir = Path("documents/power_of_attorney")
