@@ -2,17 +2,21 @@ $ErrorActionPreference = "Stop"
 
 Set-Location -Path $PSScriptRoot
 
-if (-not (Test-Path ".venv")) {
+$venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+$venvPip = Join-Path $PSScriptRoot ".venv\Scripts\pip.exe"
+
+# Проверяем готовое venv по python.exe, а не по папке (иначе пустой .venv ломает запуск)
+if (-not (Test-Path $venvPython)) {
   Write-Host "Creating virtual environment..."
+  if (Test-Path ".venv") {
+    Remove-Item -Recurse -Force ".venv"
+  }
   python -m venv .venv
 }
 
-Write-Host "Activating virtual environment..."
-& ".\.venv\Scripts\Activate.ps1"
-
 Write-Host "Installing dependencies..."
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+& $venvPython -m pip install --upgrade pip
+& $venvPip install -r requirements.txt
 
 if (-not (Test-Path ".env")) {
   if (Test-Path ".env.example") {
@@ -24,7 +28,7 @@ if (-not (Test-Path ".env")) {
 }
 
 Write-Host "Applying migrations..."
-python manage.py migrate
+& $venvPython manage.py migrate
 
 Write-Host "Starting server at http://127.0.0.1:8000/"
-python manage.py runserver
+& $venvPython manage.py runserver
