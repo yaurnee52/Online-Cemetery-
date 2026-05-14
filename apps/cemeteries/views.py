@@ -16,6 +16,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.marketplace.holidays import get_active_holiday_reminders
+
 from . import services
 from .filters import BurialFilter, BurialPersonFilter, CemeteryFilter
 from .models import Burial, BurialPerson, Cemetery
@@ -210,7 +212,7 @@ class IndexView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["title"] = APP_TITLE
+        ctx["title"] = f"{APP_TITLE} — Поиск захоронений"
         ctx["cemeteries"] = Cemetery.objects.all()
         return ctx
 
@@ -245,13 +247,24 @@ class MapView(TemplateView):
                         "burial_id": burial.id,
                     }
 
+        holiday_reminders = [
+            {
+                "title": r.title,
+                "body": r.body,
+                "holiday_date": r.holiday_date.isoformat(),
+                "days_until": r.days_until,
+                "marketplace_url": r.marketplace_url,
+            }
+            for r in get_active_holiday_reminders(days_before=15)
+        ]
         ctx.update(
             {
-                "title": f"{APP_TITLE} — Карта",
+                "title": f"{APP_TITLE} — Главная",
                 "dgis_api_key": settings.DGIS_API_KEY or settings.DGIS_FALLBACK_KEY,
                 "markers_json": json.dumps(markers, ensure_ascii=False),
                 "focus_point_json": json.dumps(focus_point, ensure_ascii=False),
                 "focus_cemetery_id_json": json.dumps(focus_cemetery_id, ensure_ascii=False),
+                "holiday_reminders_json": json.dumps(holiday_reminders, ensure_ascii=False),
             }
         )
         return ctx

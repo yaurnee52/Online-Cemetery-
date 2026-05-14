@@ -21,8 +21,9 @@ api_urlpatterns = [
 
 
 urlpatterns = [
-    # HTML
-    path("", views.IndexView.as_view(), name="index"),
+    # HTML — карта как точка входа на сайт
+    path("", views.MapView.as_view(), name="index"),
+    path("search/", views.IndexView.as_view(), name="search"),
     path("map/", views.MapView.as_view(), name="map"),
     path("cemetery/<int:cemetery_id>/", views.CemeteryDetailView.as_view(), name="cemetery-detail"),
     # REST
