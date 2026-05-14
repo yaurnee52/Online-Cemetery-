@@ -643,7 +643,8 @@
                   <option value="executor">Исполнитель</option>
                 </select>
               </div>
-              <div class="col-12"><input class="form-control" name="display_name" placeholder="Имя"></div>
+              {% include "partials/identity_fields.html" with identity_prefix="modal" %}
+              <div class="col-12"><input class="form-control" name="display_name" placeholder="Имя для отображения (необяз.)"></div>
               <div class="col-12"><input class="form-control" name="phone" placeholder="Телефон"></div>
               <div class="col-12 d-grid"><button class="btn btn-accent" type="submit">Зарегистрироваться</button></div>
               <div class="col-12 text-center">
@@ -809,10 +810,26 @@
         window.location.href = "{% url 'cabinet-page' %}";
       });
 
+      function bindIdentityFields(root) {
+        const noPat = root.querySelector(".identity-no-patronymic");
+        const pat = root.querySelector(".identity-patronymic");
+        if (!noPat || !pat) return;
+        const sync = () => {
+          const skip = noPat.checked;
+          pat.disabled = skip;
+          pat.required = !skip;
+          if (skip) pat.value = "";
+        };
+        noPat.addEventListener("change", sync);
+        sync();
+      }
+      if (modalRegisterForm) bindIdentityFields(modalRegisterForm);
+
       modalRegisterForm?.addEventListener("submit", async (e) => {
         e.preventDefault();
         modalStatus.textContent = "Регистрация...";
         const body = Object.fromEntries(new FormData(modalRegisterForm).entries());
+        body.no_patronymic = !!modalRegisterForm.querySelector("[name=no_patronymic]")?.checked;
         const r = await fetch("/api/auth/register/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

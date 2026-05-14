@@ -1,0 +1,32 @@
+{# ФИО и паспорт — регистрация и профиль #}
+<div class="col-12"><div class="small-kbd mb-1">Паспортные данные (для доверенности)</div></div>
+<div class="col-12 col-md-4">
+  <label class="form-label text-muted-soft small">Фамилия</label>
+  <input name="last_name" class="form-control" required autocomplete="family-name">
+</div>
+<div class="col-12 col-md-4">
+  <label class="form-label text-muted-soft small">Имя</label>
+  <input name="first_name" class="form-control" required autocomplete="given-name">
+</div>
+<div class="col-12 col-md-4">
+  <label class="form-label text-muted-soft small">Отчество</label>
+  <input name="patronymic" class="form-control identity-patronymic" autocomplete="additional-name">
+</div>
+<div class="col-12">
+  <div class="form-check">
+    <input class="form-check-input identity-no-patronymic" type="checkbox" name="no_patronymic" id="{{ identity_prefix|default:'id' }}-no-patronymic" value="true">
+    <label class="form-check-label text-muted-soft small" for="{{ identity_prefix|default:'id' }}-no-patronymic">Нет отчества</label>
+  </div>
+</div>
+<div class="col-12 col-md-4">
+  <label class="form-label text-muted-soft small">Серия паспорта</label>
+  <input name="passport_series" class="form-control" placeholder="12 13" required inputmode="numeric">
+</div>
+<div class="col-12 col-md-4">
+  <label class="form-label text-muted-soft small">Номер паспорта</label>
+  <input name="passport_number" class="form-control" placeholder="123456" required maxlength="6" inputmode="numeric">
+</div>
+<div class="col-12 col-md-4">
+  <label class="form-label text-muted-soft small">Город (в доверенности)</label>
+  <input name="poa_city" class="form-control" placeholder="г. Москва" value="г. Москва">
+</div>

@@ -25,9 +25,10 @@
           <option value="executor">Исполнитель</option>
         </select>
       </div>
+      {% include "partials/identity_fields.html" with identity_prefix="reg" %}
       <div class="col-12 col-md-6">
-        <label class="form-label text-muted-soft small">Имя для отображения</label>
-        <input name="display_name" class="form-control">
+        <label class="form-label text-muted-soft small">Имя для отображения (необязательно)</label>
+        <input name="display_name" class="form-control" placeholder="По умолчанию — ФИО из паспорта">
       </div>
       <div class="col-12 col-md-6">
         <label class="form-label text-muted-soft small">Телефон</label>
@@ -48,12 +49,28 @@
 
 {% block scripts %}
   <script>
+    function bindIdentityFields(root) {
+      const noPat = root.querySelector(".identity-no-patronymic");
+      const pat = root.querySelector(".identity-patronymic");
+      if (!noPat || !pat) return;
+      const sync = () => {
+        const skip = noPat.checked;
+        pat.disabled = skip;
+        pat.required = !skip;
+        if (skip) pat.value = "";
+      };
+      noPat.addEventListener("change", sync);
+      sync();
+    }
+    bindIdentityFields(document.getElementById("register-form"));
+
     const form = document.getElementById("register-form");
     const statusEl = document.getElementById("register-status");
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       statusEl.textContent = "Создание аккаунта...";
       const body = Object.fromEntries(new FormData(form).entries());
+      body.no_patronymic = !!form.querySelector("[name=no_patronymic]")?.checked;
       try {
         const r = await fetch("/api/auth/register/", {
           method: "POST",
