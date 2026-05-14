@@ -495,6 +495,93 @@
       html[data-theme="light"] #search-notes .text-light{
         color: #1b2a4d !important;
       }
+
+      .holiday-toast-stack{
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 10050;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        max-width: min(400px, calc(100vw - 2rem));
+        pointer-events: none;
+      }
+
+      .holiday-toast{
+        pointer-events: auto;
+        position: relative;
+        background: linear-gradient(145deg, #1a2748 0%, #243560 55%, #1e3358 100%);
+        border: 1px solid rgba(108, 228, 255, 0.55);
+        border-radius: 1rem;
+        padding: 1.1rem 2.75rem 1.1rem 1.2rem;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+        animation: holiday-toast-in 0.35s ease-out;
+        color: #f4f8ff;
+      }
+
+      .holiday-toast .holiday-toast-title{
+        color: #ffffff;
+        font-size: 1.05rem;
+      }
+
+      .holiday-toast .holiday-toast-body{
+        color: #c8d8f5;
+        line-height: 1.45;
+      }
+
+      .holiday-toast .holiday-toast-when{
+        color: #9ed8ff;
+        font-size: 0.85rem;
+        margin-bottom: 0.35rem;
+      }
+
+      .holiday-toast .holiday-toast-context{
+        color: rgba(200, 220, 255, 0.88);
+        font-size: 0.8rem;
+        margin-bottom: 0.5rem;
+        line-height: 1.35;
+      }
+
+      html[data-theme="light"] .holiday-toast{
+        background: linear-gradient(145deg, #15203d 0%, #1e2f52 100%);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+        color: #f8fbff;
+      }
+
+      @keyframes holiday-toast-in{
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .holiday-toast-title{
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+        padding-right: 0.5rem;
+      }
+
+      .holiday-toast-close{
+        position: absolute;
+        top: 0.45rem;
+        right: 0.55rem;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0.15rem 0.35rem;
+        border-radius: 0.35rem;
+      }
+
+      .holiday-toast-close:hover{
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .holiday-toast .btn-accent{
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
@@ -509,7 +596,7 @@
         <div class="collapse navbar-collapse" id="nav">
           <ul class="navbar-nav ms-auto">
             <li class="nav-item"><a class="nav-link" href="{% url 'index' %}">Главная</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'map' %}">Карта</a></li>
+            <li class="nav-item"><a class="nav-link" href="{% url 'search' %}">Поиск</a></li>
             <li class="nav-item nav-services-link"><a class="nav-link" href="{% url 'marketplace-services-page' %}">Услуги</a></li>
             <li class="nav-item auth-guest-link"><a class="nav-link" href="{% url 'register-page' %}" data-auth-modal="register">Регистрация</a></li>
             <li class="nav-item auth-guest-link"><a class="nav-link" href="{% url 'login-page' %}" data-auth-modal="login">Вход</a></li>
@@ -526,6 +613,8 @@
     <main class="container-fluid py-4 py-md-5 px-3 px-md-4">
       {% block content %}{% endblock %}
     </main>
+
+    <div id="holiday-toast-stack" class="holiday-toast-stack" aria-live="polite"></div>
 
     <div class="modal fade" id="authModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -711,7 +800,10 @@
           window.location.href = "/admin/";
           return;
         }
-        if (window.location.pathname === "{% url 'index' %}" || window.location.pathname === "{% url 'map' %}") {
+        if (typeof ocConsumePendingServiceAfterAuth === "function" && ocConsumePendingServiceAfterAuth()) {
+          return;
+        }
+        if (["{% url 'index' %}", "{% url 'map' %}", "{% url 'search' %}"].includes(window.location.pathname)) {
           return;
         }
         window.location.href = "{% url 'cabinet-page' %}";
@@ -745,8 +837,122 @@
         await ocRefreshProfile();
         syncAuthNav();
         authModal.hide();
+        if (typeof ocConsumePendingServiceAfterAuth === "function" && ocConsumePendingServiceAfterAuth()) {
+          return;
+        }
       });
-      window.ocAuth = { ocGetAccessToken, ocSetTokens, ocClearTokens, ocAuthFetch, syncAuthNav, ocRefreshProfile, ocGetProfile };
+
+      const OC_PENDING_SERVICE_KEY = "oc_pending_service_code";
+
+      function ocGetDismissedHolidayKeys() {
+        try {
+          return JSON.parse(localStorage.getItem("oc_dismissed_holidays") || "[]");
+        } catch (_) {
+          return [];
+        }
+      }
+
+      function ocDismissHolidayKey(key) {
+        const keys = ocGetDismissedHolidayKeys();
+        if (!keys.includes(key)) keys.push(key);
+        localStorage.setItem("oc_dismissed_holidays", JSON.stringify(keys));
+      }
+
+      function ocGoToCabinetWithService(serviceCode) {
+        const params = new URLSearchParams({ tab: "orders" });
+        if (serviceCode) params.set("service", serviceCode);
+        const target = `/cabinet/?${params.toString()}`;
+        if (window.location.pathname === "/cabinet/") {
+          window.location.href = target;
+          return;
+        }
+        window.location.href = target;
+      }
+
+      function ocConsumePendingServiceAfterAuth() {
+        const code = localStorage.getItem(OC_PENDING_SERVICE_KEY);
+        if (!code) return false;
+        localStorage.removeItem(OC_PENDING_SERVICE_KEY);
+        ocGoToCabinetWithService(code);
+        return true;
+      }
+
+      function ocOrderService(serviceCode) {
+        if (!serviceCode) return;
+        if (!ocGetAccessToken()) {
+          localStorage.setItem(OC_PENDING_SERVICE_KEY, serviceCode);
+          openAuthModal("login");
+          return;
+        }
+        ocGoToCabinetWithService(serviceCode);
+      }
+
+      function renderHolidayToast(item) {
+        const stack = document.getElementById("holiday-toast-stack");
+        if (!stack || !item) return;
+        const when = item.days_until === 0
+          ? "сегодня"
+          : `через ${item.days_until} дн.`;
+        const dateLine = item.holiday_date_display || item.holiday_date || "";
+        const contextLine = item.date_context
+          ? `<div class="holiday-toast-context">${item.date_context}</div>`
+          : "";
+        const serviceCode = item.primary_service_code || (item.service_codes && item.service_codes[0]) || "";
+        stack.innerHTML = `
+          <div class="holiday-toast" data-holiday-key="${item.key}">
+            <button type="button" class="holiday-toast-close" aria-label="Закрыть">&times;</button>
+            <div class="holiday-toast-title">🕯 ${item.title}</div>
+            <div class="holiday-toast-when">${dateLine} · ${when}</div>
+            ${contextLine}
+            <div class="holiday-toast-body small mb-3">${item.body}</div>
+            <button type="button" class="btn btn-sm btn-accent" data-order-service="${serviceCode}">Заказать услугу</button>
+          </div>
+        `;
+        stack.querySelector(".holiday-toast-close")?.addEventListener("click", () => {
+          ocDismissHolidayKey(item.key);
+          stack.innerHTML = "";
+          loadHolidayToast();
+        });
+        stack.querySelector("[data-order-service]")?.addEventListener("click", () => {
+          ocOrderService(serviceCode);
+        });
+      }
+
+      async function loadHolidayToast() {
+        const stack = document.getElementById("holiday-toast-stack");
+        if (!stack) return;
+        try {
+          const r = await fetch("/api/marketplace/holiday-reminders/?days_before=15");
+          if (!r.ok) return;
+          const data = await r.json();
+          const items = Array.isArray(data.items) ? data.items : [];
+          const dismissed = ocGetDismissedHolidayKeys();
+          const visible = items
+            .filter((i) => !dismissed.includes(i.key))
+            .sort((a, b) => a.days_until - b.days_until);
+          if (!visible.length) {
+            stack.innerHTML = "";
+            return;
+          }
+          renderHolidayToast(visible[0]);
+        } catch (_) {
+          stack.innerHTML = "";
+        }
+      }
+
+      window.ocAuth = {
+        ocGetAccessToken,
+        ocSetTokens,
+        ocClearTokens,
+        ocAuthFetch,
+        syncAuthNav,
+        ocRefreshProfile,
+        ocGetProfile,
+        ocOrderService,
+        ocConsumePendingServiceAfterAuth,
+      };
+
+      loadHolidayToast();
     </script>
 
     {% block scripts %}{% endblock %}
