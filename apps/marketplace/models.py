@@ -43,6 +43,11 @@ class OrderStatus(models.TextChoices):
     CANCELLED = "cancelled", "Отменен"
 
 
+class OrderPaymentStatus(models.TextChoices):
+    PENDING = "pending", "Ожидает оплаты"
+    PAID = "paid", "Оплачен"
+
+
 class Order(models.Model):
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="customer_orders"
@@ -59,7 +64,19 @@ class Order(models.Model):
     status = models.CharField(max_length=16, choices=OrderStatus.choices, default=OrderStatus.CREATED)
     description = models.TextField(blank=True)
     scheduled_at = models.DateTimeField(null=True, blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Вознаграждение исполнителя (без сервисного сбора платформы).",
+    )
+    payment_status = models.CharField(
+        max_length=16,
+        choices=OrderPaymentStatus.choices,
+        default=OrderPaymentStatus.PENDING,
+    )
+    paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -70,6 +87,17 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} ({self.get_status_display()})"
+
+    def customer_sequence_number(self) -> int:
+        """Порядковый номер заказа у заказчика (1, 2, 3…), стабильный в интерфейсе."""
+        return (
+            Order.objects.filter(customer_id=self.customer_id)
+            .filter(
+                models.Q(created_at__lt=self.created_at)
+                | models.Q(created_at=self.created_at, id__lte=self.id)
+            )
+            .count()
+        )
 
 
 class PhotoKind(models.TextChoices):
