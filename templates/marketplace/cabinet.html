@@ -10,7 +10,7 @@
     </div>
 
     <ul class="nav nav-pills mb-4" id="cabinet-tabs">
-      <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2" data-tab="orders">Мои заказы</button></li>
+      <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2 active" data-tab="orders">Мои заказы</button></li>
       <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2" data-tab="notifications">Уведомления</button></li>
       <li class="nav-item"><button class="btn btn-outline-light btn-sm me-2" data-tab="subscriptions">Подписки</button></li>
       <li class="nav-item"><button class="btn btn-outline-light btn-sm" data-tab="donations">Донаты</button></li>
@@ -36,27 +36,33 @@
       <div id="password-status" class="small-kbd mt-2"></div>
     </div>
 
-    <div class="panel p-3 search-block search-block-primary mb-4">
+    <div class="panel p-3 search-block search-block-primary mb-4" id="order-create-panel">
       <div class="h6 mb-3">Создать заказ</div>
-      <form id="order-create-form" class="row g-2">
-        <div class="col-12 col-lg-3">
+      <form id="order-create-form" class="row g-2 align-items-end">
+        <div class="col-12 col-lg">
+          <label class="form-label text-muted-soft small mb-1">Захоронение</label>
           <input name="burial" class="form-control" placeholder="ID захоронения" value="{{ new_burial }}">
         </div>
-        <div class="col-12 col-lg-3">
+        <div class="col-12 col-lg">
+          <label class="form-label text-muted-soft small mb-1">Услуга</label>
           <select id="service-type-select" name="service_type" class="form-select"></select>
         </div>
-        <div class="col-12 col-lg-3 d-none">
+        <div class="col-12 col-lg" id="executor-choice-col">
+          <label class="form-label text-muted-soft small mb-1">Исполнитель</label>
           <select id="executor-select" name="executor" class="form-select">
-            <option value="">Исполнитель не выбран</option>
+            <option value="">Без исполнителя — свободный заказ</option>
           </select>
         </div>
-        <div class="col-12 col-lg-3">
+        <div class="col-12 col-lg">
+          <label class="form-label text-muted-soft small mb-1">Комментарий</label>
           <input name="description" class="form-control" placeholder="Комментарий к заказу">
         </div>
-        <div class="col-12 col-lg-3 d-grid">
+        <div class="col-12 col-lg-auto d-grid">
+          <label class="form-label text-muted-soft small mb-1 invisible" aria-hidden="true">Действие</label>
           <button class="btn btn-accent" type="submit">Создать</button>
         </div>
       </form>
+      <p class="small text-muted-soft mt-2 mb-0">Исполнителя можно не выбирать — заказ увидят в «Свободные заказы».</p>
       <div id="order-create-status" class="small-kbd mt-2"></div>
       <div id="executor-preview" class="mt-3"></div>
       <div id="executor-cards" class="row g-3 mt-1"></div>
@@ -98,6 +104,13 @@
         <button class="btn btn-sm btn-outline-light" type="button" data-filter="done">Завершенные</button>
         <button class="btn btn-sm btn-outline-light" type="button" data-filter="archive">Архив</button>
       </div>
+
+      <div class="d-none d-flex flex-wrap gap-2 mb-3" id="executor-orders-filter">
+        <button class="btn btn-sm btn-outline-light active" type="button" data-efilter="my_active">Мои в работе</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-efilter="open_pool">Свободные заказы</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-efilter="done">Ждут подтверждения</button>
+        <button class="btn btn-sm btn-outline-light" type="button" data-efilter="archive">Архив</button>
+      </div>
       <div id="orders-list" class="row g-3"></div>
     </div>
     <div id="tab-notifications" class="cabinet-tab d-none">
@@ -137,13 +150,15 @@
     const executorServiceSelect = document.getElementById("executor-service-select");
     const executorOffersList = document.getElementById("executor-offers-list");
     const favoritesPanel = document.getElementById("favorites-panel");
-    const orderCreatePanel = document.getElementById("order-create-form").closest(".panel");
+    const orderCreatePanel = document.getElementById("order-create-panel");
     const tabsContainer = document.getElementById("cabinet-tabs");
     const orderCreateForm = document.getElementById("order-create-form");
     let profile = null;
     let activeTab = "";
     let ordersCache = [];
     let ordersFilter = "all";
+    let executorOrdersFilter = "my_active";
+    let serviceByCode = {};
     const urlParams = new URLSearchParams(window.location.search);
 
     function ensureAuth() {
@@ -166,9 +181,11 @@
       document.querySelector("#profile-form [name='bio']").value = profile.bio || "";
 
       const isExecutor = profile.role === "executor";
-      orderCreatePanel.classList.toggle("d-none", isExecutor);
-      favoritesPanel.classList.toggle("d-none", isExecutor);
+      orderCreatePanel?.classList.toggle("d-none", isExecutor);
+      favoritesPanel?.classList.toggle("d-none", isExecutor);
       executorOffersPanel.classList.toggle("d-none", !isExecutor);
+      const ordersFilterEl = document.getElementById("orders-filter");
+      const executorOrdersFilterEl = document.getElementById("executor-orders-filter");
       if (isExecutor) {
         tabsContainer.classList.add("d-none");
         ["orders", "notifications", "subscriptions", "donations"].forEach((tab) => {
@@ -178,11 +195,13 @@
           if (panel) panel.classList.add("d-none");
         });
         document.getElementById("tab-orders").classList.remove("d-none");
+        ordersFilterEl?.classList.add("d-none");
+        executorOrdersFilterEl?.classList.remove("d-none");
+        executorOrdersFilter = "my_active";
       } else {
         tabsContainer.classList.remove("d-none");
-        document.querySelectorAll(".cabinet-tab").forEach((el) => el.classList.add("d-none"));
-        orderCreatePanel.classList.add("d-none");
-        favoritesPanel.classList.add("d-none");
+        ordersFilterEl?.classList.remove("d-none");
+        executorOrdersFilterEl?.classList.add("d-none");
       }
       return profile;
     }
@@ -202,17 +221,29 @@
       const panel = document.getElementById(`tab-${activeTab}`);
       if (panel) panel.classList.remove("d-none");
       const showOrders = activeTab === "orders";
-      orderCreatePanel.classList.toggle("d-none", !showOrders);
-      favoritesPanel.classList.toggle("d-none", !showOrders);
+      const isCustomer = profile?.role === "customer";
+      const hideOrderForm = !showOrders || !isCustomer;
+      orderCreatePanel?.classList.toggle("d-none", hideOrderForm);
+      favoritesPanel?.classList.toggle("d-none", hideOrderForm);
     }
 
     async function loadServiceTypes() {
       const r = await fetch("/api/marketplace/services/");
       const data = await r.json();
       const items = Array.isArray(data.results) ? data.results : data;
-      serviceSelect.innerHTML = (items || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+      serviceByCode = Object.fromEntries((items || []).map((s) => [s.code, s]));
+      serviceSelect.innerHTML = (items || []).map((s) => `<option value="${s.id}" data-code="${s.code}">${s.name}</option>`).join("");
       executorServiceSelect.innerHTML = (items || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
       await loadExecutorOffersForService();
+    }
+
+    async function applyPresetServiceFromUrl() {
+      const code = urlParams.get("service");
+      if (!code || !serviceByCode[code]) return;
+      serviceSelect.value = String(serviceByCode[code].id);
+      await loadExecutorOffersForService();
+      activateCustomerTab("orders");
+      orderCreatePanel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     async function loadExecutorOffersForService() {
@@ -226,7 +257,7 @@
       const r = await authFetch(`/api/marketplace/executor-offers/catalog/?service_type=${serviceType}`);
       const data = await r.json();
       const items = Array.isArray(data.results) ? data.results : data;
-      executorSelect.innerHTML = `<option value="">Исполнитель не выбран</option>` + (items || []).filter((i) => i.is_available).map((item) => {
+      executorSelect.innerHTML = `<option value="">Без исполнителя — свободный заказ</option>` + (items || []).filter((i) => i.is_available).map((item) => {
         const label = item.executor_display_name || item.executor_name;
         return `<option value="${item.executor}">${label} · ${item.fixed_price} RUB</option>`;
       }).join("");
@@ -236,8 +267,10 @@
     function renderExecutorPreview(offers) {
       const selectedExecutorId = executorSelect.value;
       const selectedOffer = (offers || []).find((o) => String(o.executor) === String(selectedExecutorId));
-      if (!selectedOffer) {
-        executorPreview.innerHTML = `<div class="small text-muted-soft">Выберите исполнителя, чтобы увидеть карточку и описание.</div>`;
+      if (!selectedExecutorId) {
+        executorPreview.innerHTML = `<div class="small text-muted-soft">Свободный заказ: исполнители увидят его в «Свободные заказы» и смогут взять в работу.</div>`;
+      } else if (!selectedOffer) {
+        executorPreview.innerHTML = `<div class="small text-muted-soft">Выберите исполнителя из списка или карточек ниже.</div>`;
       } else {
         const title = selectedOffer.executor_display_name || selectedOffer.executor_name;
         executorPreview.innerHTML = `
@@ -273,33 +306,76 @@
     }
 
     function renderOrders() {
+      const isExecutor = profile?.role === "executor";
+      const myId = profile?.id;
       const items = (ordersCache || []).filter((o) => {
+        if (isExecutor) {
+          const isMine = Number(o.executor) === Number(myId);
+          const isOpen = !o.executor && o.status === "created";
+          if (executorOrdersFilter === "my_active") return isMine && ["created", "in_progress"].includes(o.status);
+          if (executorOrdersFilter === "open_pool") return isOpen;
+          if (executorOrdersFilter === "done") return isMine && o.status === "done";
+          if (executorOrdersFilter === "archive") return isMine && ["confirmed", "cancelled"].includes(o.status);
+          return false;
+        }
         if (ordersFilter === "active") return ["created", "in_progress"].includes(o.status);
-        if (ordersFilter === "done") return ["done"].includes(o.status);
+        if (ordersFilter === "done") return o.status === "done";
         if (ordersFilter === "archive") return ["confirmed", "cancelled"].includes(o.status);
         return true;
       });
       if (!items.length) {
-        ordersList.innerHTML = `<div class="col-12"><div class="panel p-3">Заказов пока нет.</div></div>`;
+        const empty = isExecutor
+          ? (executorOrdersFilter === "open_pool" ? "Свободных заказов сейчас нет." : "В этом разделе заказов нет.")
+          : "Заказов пока нет.";
+        ordersList.innerHTML = `<div class="col-12"><div class="panel p-3">${empty}</div></div>`;
         return;
       }
-      ordersList.innerHTML = items.map((o) => `
+      ordersList.innerHTML = items.map((o) => {
+        const isOpen = !o.executor && o.status === "created";
+        const isMine = Number(o.executor) === Number(myId);
+        let badge = "";
+        if (isExecutor) {
+          if (isOpen) badge = `<span class="badge rounded-pill text-bg-info ms-2">Свободный</span>`;
+          else if (isMine) badge = `<span class="badge rounded-pill text-bg-success ms-2">Мой</span>`;
+        } else if (!o.executor && o.status === "created") {
+          badge = `<span class="badge rounded-pill text-bg-secondary ms-2">Ожидает исполнителя</span>`;
+        }
+        const takeBtn = isExecutor && isOpen
+          ? `<button type="button" class="btn btn-sm btn-accent me-2" data-take-order="${o.id}">Взять заказ</button>`
+          : "";
+        const title = profile?.role === "customer" ? `Заказ #${o.customer_order_number || o.id}` : `Заказ #${o.id}`;
+        return `
         <div class="col-12 col-lg-6">
           <div class="panel p-3 h-100">
-            <div class="d-flex justify-content-between mb-2">
-              <div class="fw-semibold">${profile?.role === "customer" ? `Заказ #${o.customer_order_number || o.id}` : "Заказ"}</div>
+            <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-1">
+              <div class="fw-semibold">${title}${badge}</div>
               <span class="small-kbd">${o.status_label || o.status}</span>
             </div>
             <div class="small mb-1">Услуга: ${o.service_type_name || "-"}</div>
             <div class="small mb-1">Захоронение: ${o.burial_label || "-"}</div>
-            ${profile?.role === "executor" && !o.power_of_attorney && ["created", "in_progress"].includes(o.status) ? `<div class="small-kbd mb-1 text-warning">Нужна доверенность перед началом работ</div>` : ""}
+            ${o.executor_name ? `<div class="small mb-1">Исполнитель: ${o.executor_name}</div>` : ""}
+            ${isExecutor && isMine && !o.power_of_attorney && ["created", "in_progress"].includes(o.status) ? `<div class="small-kbd mb-1 text-warning">Нужна доверенность перед началом работ</div>` : ""}
             <div class="small text-muted-soft mb-3">${o.description || ""}</div>
-            <a class="btn btn-sm btn-outline-light" href="/orders/${o.id}/">Открыть заказ</a>
+            <div class="d-flex flex-wrap gap-2">
+              ${takeBtn}
+              <a class="btn btn-sm btn-outline-light" href="/orders/${o.id}/">Открыть заказ</a>
+            </div>
           </div>
-        </div>
-      `).join("");
-    }
+        </div>`;
+      }).join("");
 
+      ordersList.querySelectorAll("[data-take-order]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const r = await authFetch(`/api/marketplace/orders/${btn.dataset.takeOrder}/take/`, { method: "POST" });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            alert("Не удалось взять заказ: " + JSON.stringify(data));
+            return;
+          }
+          await loadOrders();
+        });
+      });
+    }
     document.querySelectorAll("#orders-filter [data-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll("#orders-filter [data-filter]").forEach((b) => b.classList.remove("active"));
@@ -309,21 +385,52 @@
       });
     });
 
+    document.querySelectorAll("#executor-orders-filter [data-efilter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#executor-orders-filter [data-efilter]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        executorOrdersFilter = btn.dataset.efilter;
+        renderOrders();
+      });
+    });
+
+
+    function isHolidayNotification(n) {
+      return n.type === "pascha" || n.type === "anniversary" || (n.payload && n.payload.holiday_key);
+    }
+
     async function loadNotifications() {
       const r = await authFetch("/api/marketplace/notifications/");
       const data = await r.json();
-      const items = Array.isArray(data.results) ? data.results : data;
-      notificationsList.innerHTML = (items || []).map((n) => `
+      const items = (Array.isArray(data.results) ? data.results : data).slice().sort((a, b) => {
+        const ah = isHolidayNotification(a) ? 0 : 1;
+        const bh = isHolidayNotification(b) ? 0 : 1;
+        return ah - bh;
+      });
+      notificationsList.innerHTML = (items || []).map((n) => {
+        const serviceCode = n.payload?.primary_service_code || (n.payload?.service_codes && n.payload.service_codes[0]);
+        const orderBtn = serviceCode && profile?.role === "customer"
+          ? `<button type="button" class="btn btn-sm btn-accent" data-order-from-notification="${serviceCode}">Заказать</button>`
+          : "";
+        return `
         <div class="col-12">
-          <div class="panel p-3 d-flex justify-content-between align-items-center">
+          <div class="panel p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div>
               <div class="fw-semibold">${n.title}</div>
               <div class="small text-muted-soft">${n.body || ""}</div>
             </div>
-            <button class="btn btn-sm btn-outline-light" data-mark-read="${n.id}">${n.is_read ? "Прочитано" : "Отметить"}</button>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-light" data-mark-read="${n.id}">${n.is_read ? "Прочитано" : "Отметить"}</button>
+              ${orderBtn}
+            </div>
           </div>
         </div>
-      `).join("") || `<div class="col-12"><div class="panel p-3">Уведомлений нет.</div></div>`;
+      `;
+      }).join("") || `<div class="col-12"><div class="panel p-3">Уведомлений нет.</div></div>`;
+
+      notificationsList.querySelectorAll("[data-order-from-notification]").forEach((btn) => {
+        btn.addEventListener("click", () => window.ocAuth?.ocOrderService?.(btn.dataset.orderFromNotification));
+      });
 
       notificationsList.querySelectorAll("[data-mark-read]").forEach((btn) => {
         btn.addEventListener("click", async () => {
@@ -347,7 +454,7 @@
       (burialItems || []).forEach((s) => {
         blocks.push(`<div class="col-12 col-md-6"><div class="panel p-3">ID ${s.burial}, кладбище: ${s.cemetery_name || "-"}, участок: ${s.burial_label || "-"}</div></div>`);
       });
-      blocks.push(`<div class="col-12 mt-2"><div class="small-kbd mb-2">Подписки на уход: ${careItems?.length || 0}</div></div>`);
+      blocks.push(`<div class="col-12 mt-2"><div class="small-kbd mb-2">Подписки на поминальные работы: ${careItems?.length || 0}</div></div>`);
       (careItems || []).forEach((s) => {
         blocks.push(`<div class="col-12 col-md-6"><div class="panel p-3">Burial ${s.burial}, услуга ${s.service_type}, период ${s.period}</div></div>`);
       });
@@ -433,6 +540,7 @@
         <div class="col-12 col-lg-6"><div class="panel p-3">
           <div class="fw-semibold mb-1">${f.person_name || "Без подписи"}</div>
           <div class="small text-muted-soft">ID ${f.burial}, кладбище: ${f.cemetery_name || "-"}, участок: ${f.burial_label || "-"}</div>
+          ${f.memorial_info ? `<div class="small-kbd mt-2 ${f.memorial_info.is_reminder_active ? "text-warning" : "text-muted-soft"}">🕯 ${f.memorial_info.label}: ${f.memorial_info.next_date_display}${f.memorial_info.is_reminder_active ? ` · ${f.memorial_info.when_short}` : ""}${f.memorial_info.note ? `<br><span class="small">${f.memorial_info.note}</span>` : ""}</div>` : (f.death_date ? `<div class="small text-muted-soft mt-2">Умер(ла): ${f.death_date}</div>` : "")}
           <div class="mt-2"><a class="btn btn-sm btn-accent" href="/cabinet/?new_burial=${f.burial}">Заказать услугу</a></div>
         </div></div>
       `).join("") || `<div class="col-12"><div class="panel p-3">Избранных захоронений нет.</div></div>`;
@@ -540,19 +648,34 @@
     (async function initCabinet() {
       if (!ensureAuth()) return;
       await loadProfile();
-      await Promise.all([loadServiceTypes(), loadOrders(), loadNotifications(), loadSubscriptions(), loadDonations(), loadFavorites(), loadExecutorOwnOffers()]);
+      await Promise.all([
+        loadServiceTypes(),
+        loadOrders(),
+        loadNotifications(),
+        loadSubscriptions(),
+        loadDonations(),
+        loadFavorites(),
+        loadExecutorOwnOffers(),
+      ]);
       if (profile?.role === "customer") {
         const presetBurial = urlParams.get("new_burial");
+        const presetService = urlParams.get("service");
         if (presetBurial) {
           activateCustomerTab("orders");
           orderCreateForm.elements.burial.value = presetBurial;
           orderCreateForm.elements.description.focus();
+        } else if (presetService) {
+          await applyPresetServiceFromUrl();
         } else {
           const requestedTab = urlParams.get("tab");
           if (requestedTab && ["orders", "notifications", "subscriptions", "donations"].includes(requestedTab)) {
             activateCustomerTab(requestedTab);
+          } else {
+            activateCustomerTab("orders");
           }
         }
+      } else if (profile?.role === "executor") {
+        activateCustomerTab("orders");
       }
     })();
   </script>
