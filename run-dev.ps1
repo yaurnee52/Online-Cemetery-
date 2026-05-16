@@ -31,4 +31,5 @@ Write-Host "Applying migrations..."
 & $venvPython manage.py migrate
 
 Write-Host "Starting server at http://127.0.0.1:8000/"
+Write-Host "Stop: Ctrl+C in this window, or .\stop-dev.ps1 | Status: .\dev-status.ps1"
 & $venvPython manage.py runserver

@@ -3,11 +3,11 @@
 {% block content %}
   <div class="panel p-4 p-md-5 form-section">
     <h1 class="h4 fw-semibold mb-2">Маркетплейс услуг</h1>
-    <p class="text-muted-soft mb-4">Заказ работ по уходу за захоронениями: удобно и прозрачно.</p>
+    <p class="text-muted-soft mb-4">Поминальные работы на захоронениях, в том числе к памятным датам и праздникам.</p>
     <div id="services-grid" class="row g-3"></div>
-    <div class="mt-4 d-flex gap-2">
+    <div class="mt-4 d-flex gap-2 flex-wrap">
       <a href="{% url 'cabinet-page' %}" class="btn btn-accent">Перейти в кабинет</a>
-      <a href="{% url 'index' %}" class="btn btn-outline-light">На главную</a>
+      <a href="{% url 'index' %}" class="btn btn-outline-light">На карту</a>
     </div>
   </div>
 {% endblock %}
@@ -18,9 +18,20 @@
     const serviceDescriptions = {
       cleaning: "Уборка участка, удаление мусора и базовая очистка территории захоронения.",
       fence_painting: "Подготовка и покраска ограждения с аккуратной обработкой элементов.",
-      inspection: "Проверка состояния места захоронения с фотофиксацией и кратким отчетом.",
-      radonitsa_remote: "Удаленный уход к памятной дате: уборка, свеча и фотоотчет для семьи.",
+      inspection: "Проверка состояния места захоронения с фотофиксацией и кратким отчётом.",
+      radonitsa_remote: "Поминальные работы к Радонице: уборка, свеча и фотоотчёт для семьи.",
+      parents_saturday: "Поминальные работы в родительскую субботу: уборка, свеча и фотоотчёт.",
+      pascha_care: "Поминальные работы к Пасхе: уборка участка и фотоотчёт.",
+      memorial_warriors: "Поминовение усопших воинов на захоронении с фотоотчётом.",
     };
+
+    function orderService(code) {
+      if (window.ocAuth?.ocOrderService) {
+        window.ocAuth.ocOrderService(code);
+        return;
+      }
+      window.location.href = `/cabinet/?service=${encodeURIComponent(code)}`;
+    }
 
     async function loadServices() {
       try {
@@ -31,14 +42,33 @@
           grid.innerHTML = `<div class="col-12"><div class="panel p-3">Список услуг пуст.</div></div>`;
           return;
         }
+        function holidayBlock(timing) {
+          if (!timing) return "";
+          const soon = timing.days_until <= 15
+            ? `<span class="text-warning"> · ${timing.when_short}</span>`
+            : "";
+          return `
+            <div class="small-kbd mb-3 p-2 rounded" style="background: rgba(108,228,255,.08); border: 1px solid rgba(108,228,255,.2);">
+              <span class="text-muted-soft d-block mb-1">Памятная дата</span>
+              <strong>${timing.holiday_title}</strong>
+              <div class="text-muted-soft mt-1">${timing.holiday_date_display}${soon}</div>
+              <div class="text-muted-soft small mt-1">${timing.date_context}</div>
+            </div>`;
+        }
+
         grid.innerHTML = items.map((s) => `
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="panel p-3 h-100">
+          <div class="col-12 col-md-6 col-xl-4">
+            <div class="panel p-3 h-100 d-flex flex-column">
               <div class="h6 mb-2">${s.name}</div>
-              <div class="small text-muted-soft mb-1">${(s.description || serviceDescriptions[s.code] || "Описание услуги будет добавлено.")}</div>
+              ${holidayBlock(s.holiday_timing)}
+              <div class="small text-muted-soft mb-3 flex-grow-1">${(s.description || serviceDescriptions[s.code] || "Описание услуги будет добавлено.")}</div>
+              <button type="button" class="btn btn-sm btn-accent" data-service-code="${s.code}">Заказать</button>
             </div>
           </div>
         `).join("");
+        grid.querySelectorAll("[data-service-code]").forEach((btn) => {
+          btn.addEventListener("click", () => orderService(btn.dataset.serviceCode));
+        });
       } catch (err) {
         grid.innerHTML = `<div class="col-12"><div class="panel p-3">Не удалось загрузить услуги.</div></div>`;
       }
