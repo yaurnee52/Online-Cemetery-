@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from django.db.models import Q
 from rest_framework import serializers
 
 from .models import (
@@ -51,26 +50,49 @@ class OrderSerializer(serializers.ModelSerializer):
     burial_label = serializers.CharField(source="burial.grave_number", read_only=True)
     power_of_attorney = serializers.FileField(source="power_of_attorney.file", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    payment_status_label = serializers.CharField(source="get_payment_status_display", read_only=True)
     executor_name = serializers.CharField(source="executor.username", read_only=True)
     executor_bio = serializers.CharField(source="executor.profile.bio", read_only=True)
     customer_order_number = serializers.SerializerMethodField()
+    customer_pricing = serializers.SerializerMethodField()
 
     def get_customer_order_number(self, obj):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return None
-        if request.user.profile.role != "customer":
+        profile = getattr(request.user, "profile", None)
+        if not profile or profile.role != "customer":
             return None
         if obj.customer_id != request.user.id:
             return None
-        return (
-            Order.objects.filter(customer_id=obj.customer_id)
-            .filter(
-                Q(created_at__lt=obj.created_at)
-                | Q(created_at=obj.created_at, id__lte=obj.id)
-            )
-            .count()
-        )
+        return obj.customer_sequence_number()
+
+    def get_customer_pricing(self, obj):
+        from apps.users.models import UserRole
+
+        from .pricing import customer_pricing_from_executor_price, ensure_order_price, resolve_executor_price
+
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        profile = getattr(request.user, "profile", None)
+        if not profile or profile.role != UserRole.CUSTOMER:
+            return None
+        if obj.customer_id != request.user.id:
+            return None
+        price = resolve_executor_price(obj)
+        if price is not None and obj.price is None:
+            ensure_order_price(obj)
+        return customer_pricing_from_executor_price(price)
+
+    def to_representation(self, instance):
+        from .pricing import resolve_executor_price
+
+        data = super().to_representation(instance)
+        resolved = resolve_executor_price(instance)
+        if resolved is not None:
+            data["price"] = str(resolved)
+        return data
 
     class Meta:
         model = Order
@@ -90,13 +112,17 @@ class OrderSerializer(serializers.ModelSerializer):
             "description",
             "scheduled_at",
             "price",
+            "payment_status",
+            "payment_status_label",
+            "paid_at",
+            "customer_pricing",
             "created_at",
             "updated_at",
             "photos",
             "review",
             "power_of_attorney",
         )
-        read_only_fields = ("customer", "created_at", "updated_at")
+        read_only_fields = ("customer", "payment_status", "paid_at", "created_at", "updated_at")
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):

@@ -22,6 +22,7 @@ from .models import (
     Order,
     OrderPhoto,
     OrderReview,
+    OrderPaymentStatus,
     OrderStatus,
     ServiceType,
 )
@@ -100,7 +101,17 @@ class OrderViewSet(viewsets.ModelViewSet):
         if order.executor_id and order.executor_id != request.user.id:
             return Response({"detail": "Заказ уже закреплен за другим исполнителем."}, status=400)
         order.executor = request.user
-        order.save(update_fields=["executor", "updated_at"])
+        update_fields = ["executor", "updated_at"]
+        if not order.price:
+            offer = ExecutorServiceOffer.objects.filter(
+                executor=request.user,
+                service_type=order.service_type,
+                is_active=True,
+            ).first()
+            if offer:
+                order.price = offer.fixed_price
+                update_fields.append("price")
+        order.save(update_fields=update_fields)
         try:
             order = transition_order(order, target_status=OrderStatus.IN_PROGRESS, actor_id=request.user.id)
         except ValueError as exc:
@@ -152,12 +163,36 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
         return Response(OrderReviewSerializer(review).data)
 
+    @action(detail=True, methods=["post"], url_path="mock-pay")
+    def mock_pay(self, request, pk=None):
+        """Демо-оплата без платёжного шлюза (только заказчик)."""
+        order = self.get_object()
+        if order.customer_id != request.user.id:
+            return Response({"detail": "Оплатить заказ может только заказчик."}, status=403)
+        from .pricing import ensure_order_price, resolve_executor_price
+
+        if resolve_executor_price(order) is None:
+            return Response(
+                {"detail": "Цена заказа ещё не определена. Дождитесь назначения исполнителя."},
+                status=400,
+            )
+        ensure_order_price(order)
+        if order.payment_status == OrderPaymentStatus.PAID:
+            return Response({"detail": "Заказ уже оплачен."}, status=400)
+        order.payment_status = OrderPaymentStatus.PAID
+        order.paid_at = timezone.now()
+        order.save(update_fields=["payment_status", "paid_at", "updated_at"])
+        return Response(OrderSerializer(order, context={"request": request}).data)
+
     @action(detail=True, methods=["post"])
     def generate_power_of_attorney(self, request, pk=None):
         order = self.get_object()
         if order.customer_id != request.user.id:
             return Response({"detail": "Только заказчик может формировать доверенность."}, status=403)
-        doc = generate_power_of_attorney(order)
+        try:
+            doc = generate_power_of_attorney(order)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
         return Response({"ok": True, "file": doc.file.url})
 
 
