@@ -16,12 +16,17 @@
       <li class="nav-item"><button class="btn btn-outline-light btn-sm" data-tab="donations">Донаты</button></li>
     </ul>
 
-    <div class="panel p-3 search-block search-block-secondary mb-4">
+    <div class="panel p-3 search-block search-block-secondary mb-4" id="profile-panel">
       <div class="h6 mb-3">Профиль</div>
+      <div id="profile-identity-summary" class="small-kbd mb-3 d-none"></div>
+      <p id="profile-staff-hint" class="small text-muted-soft d-none mb-3">Для учётной записи администратора паспортные данные не требуются.</p>
       <form id="profile-form" class="row g-2">
         <div class="col-12 col-md-4"><input name="username" class="form-control" placeholder="Username"></div>
         <div class="col-12 col-md-4"><input name="email" class="form-control" placeholder="Email"></div>
         <div class="col-12 col-md-4"><input name="display_name" class="form-control" placeholder="Имя для отображения"></div>
+        <div id="profile-identity-block" class="row g-2">
+          {% include "partials/identity_fields.html" with identity_prefix="cabinet" %}
+        </div>
         <div class="col-12 col-md-4"><input name="phone" class="form-control" placeholder="Телефон"></div>
         <div class="col-12 col-md-8"><input name="bio" class="form-control" placeholder="О себе"></div>
         <div class="col-12 d-grid"><button class="btn btn-accent" type="submit">Сохранить профиль</button></div>
@@ -157,6 +162,89 @@
     let activeTab = "";
     let ordersCache = [];
     let ordersFilter = "all";
+
+    function orderDisplayNumber(order, role) {
+      if (role === "customer" && order.customer_order_number != null) {
+        return order.customer_order_number;
+      }
+      return order.id;
+    }
+
+    const PLATFORM_FEE_PERCENT = 10;
+
+    function formatRub(value) {
+      const n = Number(value);
+      if (Number.isNaN(n)) return value;
+      return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(n);
+    }
+
+    function customerPricingFromExecutor(executorPrice) {
+      const base = Number(executorPrice);
+      if (Number.isNaN(base)) return null;
+      const fee = Math.round(base * PLATFORM_FEE_PERCENT) / 100;
+      const total = Math.round((base + fee) * 100) / 100;
+      return {
+        executor_price: base,
+        platform_fee: fee,
+        platform_fee_percent: PLATFORM_FEE_PERCENT,
+        customer_total: total,
+      };
+    }
+
+    function renderPricingBreakdownHtml(pricing, compact) {
+      if (!pricing) return "";
+      if (compact) {
+        return `<div class="small-kbd mt-2">К оплате: ${formatRub(pricing.customer_total)} (услуга ${formatRub(pricing.executor_price)} + сбор ${pricing.platform_fee_percent}%)</div>`;
+      }
+      return `
+        <div class="small-kbd mt-2 p-2 rounded" style="background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);">
+          <div class="d-flex justify-content-between gap-2"><span class="text-muted-soft">Услуга исполнителя</span><span>${formatRub(pricing.executor_price)}</span></div>
+          <div class="d-flex justify-content-between gap-2 mt-1"><span class="text-muted-soft">Сервисный сбор (${pricing.platform_fee_percent}%)</span><span>${formatRub(pricing.platform_fee)}</span></div>
+          <div class="d-flex justify-content-between gap-2 mt-1 fw-semibold"><span>Итого</span><span>${formatRub(pricing.customer_total)}</span></div>
+        </div>`;
+    }
+
+    function renderPaymentStatusBadge(paymentStatus) {
+      const paid = paymentStatus === "paid";
+      return paid
+        ? `<span class="badge rounded-pill text-bg-success">Оплачено</span>`
+        : `<span class="badge rounded-pill text-bg-warning text-dark">Ожидает оплаты</span>`;
+    }
+
+    function renderCustomerPaymentBlock(o) {
+      if (!o.executor) {
+        if (o.status === "created") {
+          return `<div class="small text-muted-soft mb-2">Стоимость появится после назначения исполнителя.</div>`;
+        }
+        return "";
+      }
+      if (!o.customer_pricing) {
+        return `<div class="small text-muted-soft mb-2">У исполнителя нет активной цены на эту услугу.</div>`;
+      }
+      const paid = o.payment_status === "paid";
+      return `
+        ${renderPricingBreakdownHtml(o.customer_pricing, true)}
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          ${renderPaymentStatusBadge(o.payment_status)}
+          ${paid ? "" : `<a class="btn btn-sm btn-accent" href="/orders/${o.id}/#customer-payment-panel">Оплатить</a>`}
+        </div>`;
+    }
+
+    function renderExecutorPaymentBlock(o) {
+      if (!o.price) {
+        return `<div class="small text-muted-soft mb-2">Вознаграждение не указано в предложении на эту услугу.</div>`;
+      }
+      const paid = o.payment_status === "paid";
+      return `
+        <div class="small mb-2">
+          <span class="text-muted-soft">Ваше вознаграждение:</span> <strong>${formatRub(o.price)}</strong>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <span class="small text-muted-soft">Оплата заказчиком:</span>
+          ${renderPaymentStatusBadge(o.payment_status)}
+          ${paid && o.paid_at ? `<span class="small text-muted-soft">${new Date(o.paid_at).toLocaleString("ru-RU")}</span>` : ""}
+        </div>`;
+    }
     let executorOrdersFilter = "my_active";
     let serviceByCode = {};
     const urlParams = new URLSearchParams(window.location.search);
@@ -170,15 +258,59 @@
     }
     if (!ensureAuth()) {}
 
+    function bindIdentityFields(root) {
+      const noPat = root.querySelector(".identity-no-patronymic");
+      const pat = root.querySelector(".identity-patronymic");
+      if (!noPat || !pat) return;
+      const sync = () => {
+        const skip = noPat.checked;
+        pat.disabled = skip;
+        pat.required = !skip;
+        if (skip) pat.value = "";
+      };
+      noPat.addEventListener("change", sync);
+      sync();
+    }
+
     async function loadProfile() {
       const r = await authFetch("/api/auth/me/");
       if (!r.ok) return null;
       profile = await r.json();
-      document.querySelector("#profile-form [name='username']").value = profile.username || "";
-      document.querySelector("#profile-form [name='email']").value = profile.email || "";
-      document.querySelector("#profile-form [name='display_name']").value = profile.display_name || "";
-      document.querySelector("#profile-form [name='phone']").value = profile.phone || "";
-      document.querySelector("#profile-form [name='bio']").value = profile.bio || "";
+      const profileForm = document.getElementById("profile-form");
+      profileForm.querySelector("[name='username']").value = profile.username || "";
+      profileForm.querySelector("[name='email']").value = profile.email || "";
+      profileForm.querySelector("[name='display_name']").value = profile.display_name || "";
+      profileForm.querySelector("[name='phone']").value = profile.phone || "";
+      profileForm.querySelector("[name='bio']").value = profile.bio || "";
+
+      const identityBlock = document.getElementById("profile-identity-block");
+      const identitySummary = document.getElementById("profile-identity-summary");
+      const staffHint = document.getElementById("profile-staff-hint");
+      if (profile.is_staff) {
+        identityBlock?.classList.add("d-none");
+        identitySummary?.classList.add("d-none");
+        staffHint?.classList.remove("d-none");
+      } else {
+        staffHint?.classList.add("d-none");
+        identityBlock?.classList.remove("d-none");
+        const set = (n, v) => { const el = profileForm.querySelector(`[name='${n}']`); if (el) el.value = v ?? ""; };
+        set("last_name", profile.last_name);
+        set("first_name", profile.first_name);
+        set("patronymic", profile.patronymic);
+        set("passport_series", profile.passport_series);
+        set("passport_number", profile.passport_number);
+        set("poa_city", profile.poa_city || "г. Москва");
+        const noPat = profileForm.querySelector("[name='no_patronymic']");
+        if (noPat) noPat.checked = !!profile.no_patronymic;
+        bindIdentityFields(profileForm);
+        if (identitySummary && profile.full_name) {
+          identitySummary.classList.remove("d-none");
+          identitySummary.innerHTML =
+            `<strong>${profile.full_name}</strong>` +
+            (profile.passport_line ? `<br>${profile.passport_line}` : "") +
+            (profile.poa_city ? `<br>${profile.poa_city}` : "");
+        }
+      }
 
       const isExecutor = profile.role === "executor";
       orderCreatePanel?.classList.toggle("d-none", isExecutor);
@@ -259,7 +391,9 @@
       const items = Array.isArray(data.results) ? data.results : data;
       executorSelect.innerHTML = `<option value="">Без исполнителя — свободный заказ</option>` + (items || []).filter((i) => i.is_available).map((item) => {
         const label = item.executor_display_name || item.executor_name;
-        return `<option value="${item.executor}">${label} · ${item.fixed_price} RUB</option>`;
+        const p = customerPricingFromExecutor(item.fixed_price);
+        const priceHint = p ? ` · к оплате ${formatRub(p.customer_total)}` : "";
+        return `<option value="${item.executor}">${label} · услуга ${item.fixed_price} RUB${priceHint}</option>`;
       }).join("");
       renderExecutorPreview(items || []);
     }
@@ -277,14 +411,15 @@
           <div class="panel p-3">
             <div class="fw-semibold">${title}</div>
             <div class="small text-muted-soft mt-1">${selectedOffer.executor_bio || "Исполнитель пока не добавил информацию о себе."}</div>
-            <div class="small-kbd mt-2">Фиксированная цена: ${selectedOffer.fixed_price} RUB</div>
+            ${renderPricingBreakdownHtml(customerPricingFromExecutor(selectedOffer.fixed_price), false)}
+            <p class="small text-muted-soft mt-2 mb-0">Исполнитель получает ${formatRub(selectedOffer.fixed_price)}; к оплате — с сервисным сбором платформы ${PLATFORM_FEE_PERCENT}%.</p>
           </div>
         `;
       }
       executorCards.innerHTML = (offers || []).map((item) => {
         const title = item.executor_display_name || item.executor_name;
         const availability = item.is_available
-          ? `<div class="small-kbd mt-2">Цена: ${item.fixed_price} RUB</div><button class="btn btn-sm btn-accent mt-2" data-pick-executor="${item.executor}" type="button">Выбрать</button>`
+          ? `${renderPricingBreakdownHtml(customerPricingFromExecutor(item.fixed_price), false)}<button class="btn btn-sm btn-accent mt-2" data-pick-executor="${item.executor}" type="button">Выбрать</button>`
           : `<div class="small text-muted-soft mt-2">Исполнитель еще не указал цену для этой услуги.</div>`;
         return `<div class="col-12 col-lg-6"><div class="panel p-3 h-100"><div class="fw-semibold">${title}</div><div class="small text-muted-soft mt-1">${item.executor_bio || "Информация отсутствует."}</div>${availability}</div></div>`;
       }).join("");
@@ -343,7 +478,14 @@
         const takeBtn = isExecutor && isOpen
           ? `<button type="button" class="btn btn-sm btn-accent me-2" data-take-order="${o.id}">Взять заказ</button>`
           : "";
-        const title = profile?.role === "customer" ? `Заказ #${o.customer_order_number || o.id}` : `Заказ #${o.id}`;
+        const title = `Заказ #${orderDisplayNumber(o, profile?.role)}`;
+        const isCustomer = profile?.role === "customer";
+        let paymentBlock = "";
+        if (isCustomer) {
+          paymentBlock = renderCustomerPaymentBlock(o);
+        } else if (isExecutor && isMine) {
+          paymentBlock = renderExecutorPaymentBlock(o);
+        }
         return `
         <div class="col-12 col-lg-6">
           <div class="panel p-3 h-100">
@@ -354,6 +496,7 @@
             <div class="small mb-1">Услуга: ${o.service_type_name || "-"}</div>
             <div class="small mb-1">Захоронение: ${o.burial_label || "-"}</div>
             ${o.executor_name ? `<div class="small mb-1">Исполнитель: ${o.executor_name}</div>` : ""}
+            ${paymentBlock}
             ${isExecutor && isMine && !o.power_of_attorney && ["created", "in_progress"].includes(o.status) ? `<div class="small-kbd mb-1 text-warning">Нужна доверенность перед началом работ</div>` : ""}
             <div class="small text-muted-soft mb-3">${o.description || ""}</div>
             <div class="d-flex flex-wrap gap-2">
@@ -489,7 +632,11 @@
         orderCreateStatus.textContent = "Ошибка: " + JSON.stringify(data);
         return;
       }
-      orderCreateStatus.textContent = `Заказ #${data.id} создан`;
+      const createdNum = orderDisplayNumber(data, "customer");
+      const payHint = data.customer_pricing
+        ? ` Сумма к оплате: ${formatRub(data.customer_pricing.customer_total)}.`
+        : "";
+      orderCreateStatus.innerHTML = `Заказ #${createdNum} создан.${payHint} <a href="/orders/${data.id}/" class="text-decoration-none">Открыть и оплатить</a>`;
       e.target.reset();
       await loadOrders();
     });
@@ -506,7 +653,11 @@
 
     document.getElementById("profile-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const body = Object.fromEntries(new FormData(e.target).entries());
+      const form = e.target;
+      const body = Object.fromEntries(new FormData(form).entries());
+      if (!profile?.is_staff) {
+        body.no_patronymic = !!form.querySelector("[name=no_patronymic]")?.checked;
+      }
       const r = await authFetch("/api/auth/me/", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
