@@ -4,13 +4,15 @@
   <div class="panel p-4 p-md-5 form-section">
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
-        <h1 class="h4 fw-semibold mb-1" id="order-title">Заказ #{{ order_id }}</h1>
+        <h1 class="h4 fw-semibold mb-1" id="order-title">Заказ</h1>
         <div class="text-muted-soft small">Управление статусом, фото-отчет, отзыв и чат.</div>
       </div>
       <a class="btn btn-outline-light btn-sm" href="{% url 'cabinet-page' %}">← В кабинет</a>
     </div>
 
     <div id="order-card" class="panel p-4 mb-4"></div>
+    <div id="customer-payment-panel" class="panel p-4 mb-4 d-none" tabindex="-1"></div>
+    <div id="executor-payment-panel" class="panel p-4 mb-4 d-none"></div>
 
     <div class="row g-4">
       <div class="col-12">
@@ -104,9 +106,76 @@
     const showOrderMapLink = document.getElementById("show-order-map");
     const showOrderMapLinkCustomer = document.getElementById("show-order-map-customer");
     const customerActionsPanel = document.getElementById("customer-actions-panel");
+    const customerPaymentPanel = document.getElementById("customer-payment-panel");
+    const executorPaymentPanel = document.getElementById("executor-payment-panel");
     const executorPhotosPanel = document.getElementById("executor-photos-panel");
     const reviewForm = document.getElementById("review-form");
     let currentUserProfile = null;
+
+    function formatRub(value) {
+      const n = Number(value);
+      if (Number.isNaN(n)) return value;
+      return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(n);
+    }
+
+    function renderCustomerPaymentPanel(data) {
+      const pricing = data.customer_pricing;
+      if (!pricing) {
+        customerPaymentPanel.classList.add("d-none");
+        customerPaymentPanel.innerHTML = "";
+        return;
+      }
+      const isPaid = data.payment_status === "paid";
+      customerPaymentPanel.classList.remove("d-none");
+      customerPaymentPanel.innerHTML = `
+        <div class="h6 mb-3">Оплата заказа</div>
+        <div class="payment-breakdown rounded p-3 mb-3" style="background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);">
+          <div class="d-flex justify-content-between align-items-baseline gap-2 mb-2">
+            <span class="small text-muted-soft">Услуга исполнителя</span>
+            <span>${formatRub(pricing.executor_price)}</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-baseline gap-2 mb-2">
+            <span class="small text-muted-soft">Сервисный сбор платформы (${pricing.platform_fee_percent}%)</span>
+            <span>${formatRub(pricing.platform_fee)}</span>
+          </div>
+          <hr class="my-2" style="border-color: rgba(255,255,255,.12);">
+          <div class="d-flex justify-content-between align-items-baseline gap-2 fw-semibold">
+            <span>Итого к оплате</span>
+            <span>${formatRub(pricing.customer_total)}</span>
+          </div>
+        </div>
+        <p class="small text-muted-soft mb-3">
+          Цена для заказчика отличается от вознаграждения исполнителя: сервисный сбор платформы составляет
+          ${pricing.platform_fee_percent}% от стоимости услуги (как на Яндекс Афише — отдельной строкой в чеке).
+          Исполнитель получает ${formatRub(pricing.executor_price)}.
+        </p>
+        ${isPaid
+          ? `<div class="alert alert-success py-2 mb-0" style="background: rgba(25,135,84,.15); border-color: rgba(25,135,84,.35);">
+               <strong>Оплачено</strong>${data.paid_at ? ` · ${new Date(data.paid_at).toLocaleString("ru-RU")}` : ""}
+             </div>`
+          : `<button type="button" class="btn btn-accent" id="mock-pay-btn">Оплатить ${formatRub(pricing.customer_total)}</button>
+             <p class="small text-muted-soft mt-2 mb-0">Демонстрационная оплата: платёжный шлюз не подключён, списание не выполняется.</p>`
+        }
+        <div id="mock-pay-result" class="small-kbd mt-2"></div>
+      `;
+      if (!isPaid) {
+        document.getElementById("mock-pay-btn")?.addEventListener("click", async () => {
+          const r = await authFetch(`/api/marketplace/orders/${orderId}/mock-pay/`, { method: "POST" });
+          const payload = await r.json();
+          const el = document.getElementById("mock-pay-result");
+          if (!r.ok) {
+            el.textContent = "Ошибка: " + JSON.stringify(payload);
+            return;
+          }
+          el.textContent = "Оплата прошла успешно (демо).";
+          const refreshed = await loadOrder();
+          if (refreshed) {
+            renderCustomerPaymentPanel(refreshed);
+            applyRoleVisibility(refreshed);
+          }
+        });
+      }
+    }
 
     function requireAuth() {
       if (!window.ocAuth.ocGetAccessToken()) {
@@ -132,17 +201,47 @@
           <div class="col-12"><div class="small text-muted-soft mb-1">Комментарий</div><div>${data.description || "-"}</div></div>
         </div>
       `;
-      if (currentUserProfile?.role === "customer" && data.customer_order_number) {
-        orderTitle.textContent = `Заказ #${data.customer_order_number}`;
-      } else {
-        orderTitle.textContent = `Заказ #${data.id}`;
-      }
+      const displayNum =
+        currentUserProfile?.role === "customer" && data.customer_order_number != null
+          ? data.customer_order_number
+          : data.id;
+      orderTitle.textContent = `Заказ #${displayNum}`;
       showOrderMapLink.href = `/map/?burial_id=${data.burial}`;
       showOrderMapLinkCustomer.href = `/map/?burial_id=${data.burial}`;
       photosList.innerHTML = (data.photos || []).map((p) => `
         <div class="small">${p.kind}: <a href="${p.image}" target="_blank">файл</a></div>
       `).join("") || `<div class="small text-muted-soft">Фото еще не загружены.</div>`;
+      if (currentUserProfile?.role === "customer") {
+        renderCustomerPaymentPanel(data);
+        executorPaymentPanel.classList.add("d-none");
+      } else if (currentUserProfile?.role === "executor" && Number(data.executor) === Number(currentUserProfile?.id)) {
+        customerPaymentPanel.classList.add("d-none");
+        renderExecutorPaymentPanel(data);
+      } else {
+        customerPaymentPanel.classList.add("d-none");
+        executorPaymentPanel.classList.add("d-none");
+      }
       return data;
+    }
+
+    function renderExecutorPaymentPanel(data) {
+      if (!data.price) {
+        executorPaymentPanel.classList.add("d-none");
+        return;
+      }
+      const paid = data.payment_status === "paid";
+      executorPaymentPanel.classList.remove("d-none");
+      executorPaymentPanel.innerHTML = `
+        <div class="h6 mb-3">Оплата заказа</div>
+        <div class="small mb-2"><span class="text-muted-soft">Ваше вознаграждение:</span> <strong>${formatRub(data.price)}</strong></div>
+        <div class="mb-0">
+          <span class="text-muted-soft small">Статус оплаты заказчиком:</span>
+          ${paid
+            ? `<span class="badge rounded-pill text-bg-success ms-2">Оплачено</span>${data.paid_at ? `<span class="small text-muted-soft ms-2">${new Date(data.paid_at).toLocaleString("ru-RU")}</span>` : ""}`
+            : `<span class="badge rounded-pill text-bg-warning text-dark ms-2">Ожидает оплаты</span>`}
+        </div>
+        <p class="small text-muted-soft mt-2 mb-0">Заказчик оплачивает услугу и сервисный сбор платформы (10%) отдельно в своём чеке.</p>
+      `;
     }
 
     async function loadProfile() {
@@ -162,6 +261,9 @@
       executorActionsPanel.classList.toggle("d-none", !isExecutor);
       executorPhotosPanel.classList.toggle("d-none", !isExecutor);
       customerActionsPanel.classList.toggle("d-none", !isCustomer);
+      const isMyOrder = Number(orderData.executor) === Number(currentUserProfile?.id);
+      customerPaymentPanel.classList.toggle("d-none", !isCustomer || !orderData.customer_pricing);
+      executorPaymentPanel.classList.toggle("d-none", !isExecutor || !isMyOrder || !orderData.price);
       reviewForm.closest(".panel").classList.toggle("d-none", !isCustomer);
 
       document.querySelectorAll("[data-action]").forEach((btn) => {
