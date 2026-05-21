@@ -59,6 +59,52 @@
         min-height: 100vh;
         font-size: 1.05rem;
         transition: background-color 0.3s ease, color 0.3s ease;
+        position: relative;
+      }
+
+      /* Фон «летающие палочки» (связанные частицы) */
+      #oc-particles-bg{
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+
+      #oc-particles-bg::before{
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(108, 228, 255, 0.09) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(108, 228, 255, 0.09) 1px, transparent 1px);
+        background-size: 30px 30px;
+        mask-image: radial-gradient(ellipse 92% 82% at 50% 42%, black 25%, transparent 78%);
+      }
+
+      html[data-theme="light"] #oc-particles-bg::before{
+        background-image:
+          linear-gradient(rgba(0, 102, 204, 0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 102, 204, 0.1) 1px, transparent 1px);
+      }
+
+      #oc-particles-canvas{
+        display: block;
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 0 1.5px rgba(108, 228, 255, 0.32));
+      }
+
+      html[data-theme="light"] #oc-particles-canvas{
+        filter: drop-shadow(0 0 1.5px rgba(0, 102, 204, 0.26));
+      }
+
+      body > .navbar,
+      body > main,
+      body > .holiday-toast-stack,
+      body > .modal{
+        position: relative;
+        z-index: 1;
       }
 
       .navbar{
@@ -585,6 +631,10 @@
     </style>
   </head>
   <body>
+    <div id="oc-particles-bg" aria-hidden="true">
+      <canvas id="oc-particles-canvas"></canvas>
+    </div>
+
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
       <div class="container">
         <a class="navbar-brand fw-semibold" href="{% url 'index' %}">
@@ -659,6 +709,7 @@
 
     <script src="{% static 'vendor/bootstrap-5.3.3/bootstrap.bundle.min.js' %}"></script>
     <script src="{% static 'vendor/tom-select-2.3.1/tom-select.complete.min.js' %}"></script>
+    <script src="{% static 'js/oc-particles-bg.js' %}" defer></script>
 
     <script>
       // Theme Toggle
@@ -677,6 +728,7 @@
         htmlElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('theme', newTheme);
         updateThemeIcon(newTheme);
+        window.dispatchEvent(new Event('oc-theme-changed'));
       });
 
       function updateThemeIcon(theme) {
